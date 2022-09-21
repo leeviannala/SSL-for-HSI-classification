@@ -275,7 +275,7 @@ def main(params):
     MX_ITER = 1000000000
     os.environ["CUDA_VISIBLE_DEVICES"] = params.GPU
 
-    device = torch.device("cuda: 0")
+    device = torch.device("cuda:0")
     print(torch.cuda.device_count())
 
     new_path = str(params.DATASET) + '/Best/' + '_'.join(
@@ -302,8 +302,9 @@ def main(params):
         if not os.path.exists(save_path):
             os.makedirs(save_path)
 
-        img, gt, LABEL_VALUES, IGNORED_LABELS, _, _ = get_dataset(DATASET, "Datasets/")
-        X, Y = get_originate_dataset(DATASET, "Datasets/")
+        datasets_root = '/mnt/data/leevi/'
+        img, gt, LABEL_VALUES, IGNORED_LABELS, _, _ = get_dataset(DATASET, datasets_root)
+        X, Y = get_originate_dataset(DATASET, datasets_root)
 
         img = img[:, :, list(range(0, 102, 3))]
 
@@ -524,7 +525,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Low shot benchmark')
     parser.add_argument('--DHCN_LAYERS', default=1, type=int)
     parser.add_argument('--SAMPLE_PERCENTAGE', default=5, type=int)
-    parser.add_argument('--DATASET', default="PaviaU", type=str)  # KSC, PaviaU, IndianPines, Botswana,    !!PaviaC
+    parser.add_argument('--DATASET', default="IndianPines", type=str)  # KSC, PaviaU, IndianPines, Botswana,    !!PaviaC
     parser.add_argument('--CONV_SIZE', default=3, type=int)  # 3,5,7
     parser.add_argument('--ROT', default=True, type=bool)  # False
     parser.add_argument('--MIRROR', default=True, type=bool)  # False

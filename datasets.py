@@ -9,7 +9,7 @@ import torch
 import torch.utils
 import torch.utils.data
 import os
-# from tqdm import tqdm
+from tqdm import tqdm
 from sklearn import preprocessing
 try:
     # Python 3
@@ -66,20 +66,20 @@ try:
 except ImportError:
     pass
 
-# class TqdmUpTo(tqdm):
-#     """Provides `update_to(n)` which uses `tqdm.update(delta_n)`."""
-#     def update_to(self, b=1, bsize=1, tsize=None):
-#         """
-#         b  : int, optional
-#             Number of blocks transferred so far [default: 1].
-#         bsize  : int, optional
-#             Size of each block (in tqdm units) [default: 1].
-#         tsize  : int, optional
-#             Total size (in tqdm units). If [default: None] remains unchanged.
-#         """
-#         if tsize is not None:
-#             self.total = tsize
-#         self.update(b * bsize - self.n)  # will also set self.n = b * bsize
+class TqdmUpTo(tqdm):
+    """Provides `update_to(n)` which uses `tqdm.update(delta_n)`."""
+    def update_to(self, b=1, bsize=1, tsize=None):
+        """
+        b  : int, optional
+            Number of blocks transferred so far [default: 1].
+        bsize  : int, optional
+            Size of each block (in tqdm units) [default: 1].
+        tsize  : int, optional
+            Total size (in tqdm units). If [default: None] remains unchanged.
+        """
+        if tsize is not None:
+            self.total = tsize
+        self.update(b * bsize - self.n)  # will also set self.n = b * bsize
 
 
 def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
@@ -103,20 +103,20 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
     dataset = datasets[dataset_name]
 
     folder = target_folder + datasets[dataset_name].get('folder', dataset_name + '/')
-    # if dataset.get('download', True):
-    #     # Download the dataset if is not present
-    #     if not os.path.isdir(folder):
-    #         os.mkdir(folder)
-    #     for url in datasets[dataset_name]['urls']:
-    #         # download the files
-    #         filename = url.split('/')[-1]
-    #         if not os.path.exists(folder + filename):
-    #             with TqdmUpTo(unit='B', unit_scale=True, miniters=1,
-    #                       desc="Downloading {}".format(filename)) as t:
-    #                 urlretrieve(url, filename=folder + filename,
-    #                                  reporthook=t.update_to)
-    # elif not os.path.isdir(folder):
-    #    print("WARNING: {} is not downloadable.".format(dataset_name))
+    if dataset.get('download', True):
+        # Download the dataset if is not present
+        if not os.path.isdir(folder):
+            os.mkdir(folder)
+        for url in datasets[dataset_name]['urls']:
+            # download the files
+            filename = url.split('/')[-1]
+            if not os.path.exists(folder + filename):
+                with TqdmUpTo(unit='B', unit_scale=True, miniters=1,
+                          desc="Downloading {}".format(filename)) as t:
+                    urlretrieve(url, filename=folder + filename,
+                                     reporthook=t.update_to)
+    elif not os.path.isdir(folder):
+       print("WARNING: {} is not downloadable.".format(dataset_name))
 
     if dataset_name == 'PaviaC':
         # Load the image
