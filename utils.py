@@ -5,7 +5,7 @@ from sklearn.metrics import confusion_matrix
 import sklearn.model_selection
 # import seaborn as sns
 # import itertools
-# import spectral
+import spectral
 import visdom
 import matplotlib.pyplot as plt
 from scipy import io, misc
@@ -27,8 +27,15 @@ import torch
 #         device = torch.device('cpu')
 #     return device
 
+def open_files(dataset):
+    #TODO: Read the folder to get all tif files
+    #TODO: Use open_file in a loop to open them one by one
+    #TODO: The loop should be in a try catch or try catch in a loop
+    #TODO: Should they be combined into one and returned or what 
+    #TODO: 
+    return None
 
-def open_file(dataset):
+def open_file(dataset): #TODO: implement opening dataset containing multiple files for tif files
     _, ext = os.path.splitext(dataset)
     ext = ext.lower()
     if ext == '.mat':

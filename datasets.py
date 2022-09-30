@@ -57,11 +57,16 @@ DATASETS_CONFIG = {
                  'http://www.ehu.es/ccwintco/uploads/5/58/Botswana_gt.mat'],
             'img': 'Houston.mat',
             'gt': 'Houston_gt.mat',
-    }
+            },
+        'hyrank': {
+            'urls': ['', ''],
+            'img': 'Training Set/Anafi.tif',
+            'gt': 'Training Set/Anafi_GT.tif'
+        }
     }
 
 try:
-    from custom_datasets import CUSTOM_DATASETS_CONFIG
+    from custom_datasets import CUSTOM_DATASETS_CONFIG #TODO: Implement and put the hyrank in it
     DATASETS_CONFIG.update(CUSTOM_DATASETS_CONFIG)
 except ImportError:
     pass
@@ -83,6 +88,7 @@ class TqdmUpTo(tqdm):
 
 
 def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
+    # TODO: Add Hyrank
     """ Gets the dataset specified by name and return the related components.
     Args:
         dataset_name: string with the name of the dataset
@@ -207,6 +213,16 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
                         "Cattail marsh", "Salt marsh", "Mud flats", "Wate"]
 
         ignored_labels = [0]
+    elif dataset_name == 'hyrank':
+        img = open_file(folder + 'Training Set/Anafi.tif')
+
+        rgb_bands = [30,20,2]
+
+        gt = open_file(folder + 'Training Set/Anafi_GT.tif')
+
+        label_values = np.unique(gt)
+
+        ignored_labels = []
     else:
         # Custom dataset
         img, gt, rgb_bands, ignored_labels, label_values, palette = CUSTOM_DATASETS_CONFIG[dataset_name]['loader'](folder)
@@ -262,7 +278,10 @@ def get_originate_dataset(dataset_name, target_folder="./", datasets=DATASETS_CO
         img = open_file(folder + 'Houston.mat')
         img = img['img']
         gt = open_file(folder + 'Houston_gt.mat')['Houston_gt']
-
+    elif dataset_name == 'hyrank':
+        img = open_file(folder + 'Training Set/Anafi.tif')
+        gt = open_file(folder + 'Training Set/Anafi_GT.tif')
+        
     return img, gt
 
 

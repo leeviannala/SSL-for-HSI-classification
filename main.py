@@ -153,7 +153,7 @@ def sample_gt3(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE):
     X = img
     Y = gt
     row, col, n_band = X.shape
-    num_class = np.max(Y)
+    num_class = np.max(Y) # TODO: Fix to the correct amount
     for i in range(1, num_class + 1):
         index = np.where(train_gt == i)
         index2 = np.where(test_gt == i)
@@ -184,13 +184,14 @@ def sample_gt3(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE):
         ytest = array2_test[i]
         labeltest = Y[xtest, ytest]
         specvectortest = X[xtest, ytest]
-        i
+        # i
         EDs = np.zeros(num_class)
         SIDs = np.zeros(num_class)
         EDtimesSIDs = np.zeros(num_class)
         EDtimesSIDs2 = np.zeros(num_class)
         minED = 10000000000
-        for j in range(1, num_class + 1):  # 类别循环
+        #for j in range(1, num_class + 1):  # 类别循环
+        for j in np.unique(gt) + 1:
             index2 = np.where(y_train == j)  ## 当前类别序号
             index2 = index2[0]
             EDsclass = []
@@ -314,9 +315,9 @@ def main(params):
         train_gt, test_gt = sample_gt(gt, SAMPLE_PERCENTAGE, mode='fixed')
         #train_gt = sample_gt2(X, Y, train_gt, test_gt, SAMPLE_PERCENTAGE)
 
-        pseudo_labelpath='PaviaU/pseudo_labels/pseudo_labels3/pseudo_labels3.npy'
+        pseudo_labelpath= str(DATASET) + '/pseudo_labels/pseudo_labels3/pseudo_labels3.npy'
         if not os.path.exists(pseudo_labelpath):
-            newdir = 'PaviaU/pseudo_labels/pseudo_labels3/'
+            newdir = str(DATASET) + '/pseudo_labels/pseudo_labels3/'
             if not os.path.exists(newdir):
                 os.makedirs(newdir)
             _, pseudo_labels3 = sample_gt3(X, Y, train_gt, test_gt, SAMPLE_PERCENTAGE)
@@ -525,7 +526,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Low shot benchmark')
     parser.add_argument('--DHCN_LAYERS', default=1, type=int)
     parser.add_argument('--SAMPLE_PERCENTAGE', default=5, type=int)
-    parser.add_argument('--DATASET', default="IndianPines", type=str)  # KSC, PaviaU, IndianPines, Botswana,    !!PaviaC
+    parser.add_argument('--DATASET', default="hyrank", type=str)  # KSC, PaviaU, IndianPines, Botswana,    !!PaviaC
     parser.add_argument('--CONV_SIZE', default=3, type=int)  # 3,5,7
     parser.add_argument('--ROT', default=True, type=bool)  # False
     parser.add_argument('--MIRROR', default=True, type=bool)  # False
