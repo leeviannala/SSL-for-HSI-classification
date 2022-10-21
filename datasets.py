@@ -220,9 +220,26 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
 
         gt = open_file(folder + 'Training Set/Anafi_GT.tif')
 
-        label_values = np.unique(gt)
+        label_values = ['Undefined',
+                        'High intensity developed', 
+                        'Med-low intensity developed',
+                        'Deciduous, Evergreen, mixed forest',
+                        'shrubland',
+                        'Grassland-Pasture',
+                        'Bareland',
+                        'water',
+                        'corn',
+                        'cotton',
+                        'cereals',
+                        'almonds',
+                        'grass fodders',
+                        'vinewards-grapes',
+                        'walnuts',
+                        'pistachios',
+                        'citrus',
+                        'fallow']
 
-        ignored_labels = []
+        ignored_labels = [0]
     else:
         # Custom dataset
         img, gt, rgb_bands, ignored_labels, label_values, palette = CUSTOM_DATASETS_CONFIG[dataset_name]['loader'](folder)
