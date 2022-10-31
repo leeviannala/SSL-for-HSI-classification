@@ -501,16 +501,17 @@ def sample_gt(gt, train_size, mode='random'):
 
 def softmax_new(x):
     ret = np.zeros(x.shape)
-    x_new = x[np.where(x==x)]
+    filt = x == x
+    x_new = np.nan_to_num(x[np.where(filt)])
     x_row_max = np.nanmax(x_new, axis=-1)
     x_row_max = x_row_max.reshape(list(x_new.shape)[:-1] + [1])
     x_new = x_new - x_row_max
     x_exp = np.exp(x_new)
     x_exp_row_sum = x_exp.sum(axis=-1).reshape(list(x.shape)[:-1] + [1])
     softmax = x_exp / x_exp_row_sum
-    ret[np.where(x==x)] = softmax
+    ret[np.where(filt)] = softmax
     return ret
-
+    
 def softmax(x):
     x_row_max = x.max(axis=-1)
     x_row_max = x_row_max.reshape(list(x.shape)[:-1] + [1])
