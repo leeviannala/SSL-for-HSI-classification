@@ -135,6 +135,7 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
         label_values = ["Undefined", "Water", "Trees", "Asphalt",
                         "Self-Blocking Bricks", "Bitumen", "Tiles", "Shadows",
                         "Meadows", "Bare Soil"]
+        all_labels = np.arange(len(label_values))
 
         ignored_labels = [0]
 
@@ -149,6 +150,7 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
         label_values = ['Undefined', 'Asphalt', 'Meadows', 'Gravel', 'Trees',
                         'Painted metal sheets', 'Bare Soil', 'Bitumen',
                         'Self-Blocking Bricks', 'Shadows']
+        all_labels = np.arange(len(label_values))
 
         ignored_labels = [0]
 
@@ -166,6 +168,7 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
                         "Soybean-notill", "Soybean-mintill", "Soybean-clean",
                         "Wheat", "Woods", "Buildings-Grass-Trees-Drives",
                         "Stone-Steel-Towers"]
+        all_labels = np.arange(len(label_values))
 
         ignored_labels = [0]
     elif dataset_name == 'Houston':
@@ -181,6 +184,7 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
                         "7-pasture-mowed", "Hay-8", "9",
                         "Soybean-10", "11-mintill", "12-clean",
                         "13", "14", "15-Grass-Trees-Drives"]
+        all_labels = np.arange(len(label_values))
 
         ignored_labels = [0]
     elif dataset_name == 'Botswana':
@@ -197,6 +201,7 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
                         "Acacia grasslands", "Short mopane", "Mixed mopane",
                         "Exposed soils"]
 
+        all_labels = np.arange(len(label_values))
         ignored_labels = [0]
 
     elif dataset_name == 'KSC':
@@ -212,6 +217,7 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
                         "Hardwood swamp", "Graminoid marsh", "Spartina marsh",
                         "Cattail marsh", "Salt marsh", "Mud flats", "Wate"]
 
+        all_labels = np.arange(len(label_values))
         ignored_labels = [0]
     elif dataset_name == 'hyrank':
         img = open_file(folder + 'Training Set/Anafi.tif')
@@ -239,6 +245,9 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
                         'citrus',
                         'fallow']
 
+        all_labels = np.arange(len(label_values))
+
+
         ignored_labels = [0]
     else:
         # Custom dataset
@@ -260,7 +269,7 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
     #data = preprocessing.scale(data)
     data  = preprocessing.minmax_scale(data)
     img = data.reshape(img.shape)
-    return img, gt, label_values, ignored_labels, rgb_bands, palette
+    return img, gt, label_values, ignored_labels, all_labels, rgb_bands, palette
 
 
 def get_originate_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):

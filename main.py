@@ -9,7 +9,7 @@ import shutil
 import argparse
 import pdb
 
-from utils import metrics, sample_gt, softmax,calprecision
+from utils import metrics, sample_gt, softmax,calprecision, softmax_new
 from datasets import get_dataset, get_originate_dataset
 from DenseConv import *
 import argparse
@@ -149,157 +149,41 @@ def pre_data(img, train_gt, params, gt,pseudo_labels3):
 
     return TRAIN_IMG, TRAIN_Y, TRAIN_PL, TRAIN_SG
 
-def sample_gt3_refactored(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE):
+def sample_gt3_new(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE, IGNORED_LABELS, ALL_LABELS):
     X = img
     Y = gt
-    row, col, n_band = X.shape # TODO: Is this true? Could be bands first, but better to make the data reader to read all files in same format
-    # num_class = np.max(Y)
-    num_class = len(np.unique(Y))
-    for i, val in np.unique(gt):
-        index = np.where(train_gt == val)
-        index2 = np.where(test_gt == val)
-
-        if i == 0:
-            array1_train = index[0]
-            array2_train = index[1]
-            array1_test = index2[0]
-            array2_test = index2[1]
-        else:
-            array1_train = np.concatenate((array1_train, index[0]))
-            array2_train = np.concatenate((array2_train, index[1]))
-            array1_test = np.concatenate((array1_test, index2[0]))
-            array2_test = np.concatenate((array2_test, index2[1]))
-
-    y_train = Y[array1_train, array2_train]
-    trueEDtimesSID = []
-    trueEDtimesSID2 = []
-    sumtrueES = []
-    sumfalseES = []
-    pseudo_labels3 = np.zeros([row, col, num_class + 1])
-    for i in range(0, len(array1_test)): # Here we go through all the values in array1_test, this is ok
-        if i % 1000 == 0:
-            print("i:%d" % (i))
-        #if i%200!=0:
-        #    continue
-        xtest = array1_test[i]
-        ytest = array2_test[i]
-        labeltest = Y[xtest, ytest]
-        specvectortest = X[xtest, ytest]
-        # i
-        EDs = np.zeros(num_class) #TODO: num_class is now length of array of unique values. Is this ok anymore? Do we want the EDs to be found by the value of ground truth
-        SIDs = np.zeros(num_class) #TODO: same as before
-        EDtimesSIDs = np.zeros(num_class) #TODO: same as before
-        EDtimesSIDs2 = np.zeros(num_class) #TODO: same as before
-        # TODO: Should these be done by appending? 
-        minED = 10000000000
-        for j in range(1, num_class + 1):  # 类别循环  # TODO: If we do this, EDs, SIDs etc. should find their place as before, leaving zeros where theres none.
-                                                       # Are zeros ok? 
-        #for j in np.unique(gt) + 1:
-            index2 = np.where(y_train == j)  ## 当前类别序号
-            index2 = index2[0]
-            EDsclass = []
-            SIDclass = []
-            EDtimesSIDclass = []
-            for nn in range(0, len(index2)):  # 类别内训练集循环 nn
-                # print(index2[nn])##当前训练样本序号
-                ind = index2[nn]
-                xtrain = array1_train[ind]
-                ytrain = array2_train[ind]
-                specvectortrain = X[xtrain, ytrain]
-                ED = np.sqrt(np.square(xtest - xtrain) + np.square(ytest - ytrain))
-                SID1 = entropy(specvectortest, specvectortrain)
-                SID2 = entropy(specvectortrain, specvectortest)
-                SID = SID1 + SID2
-                EDtimesSID = np.sqrt(ED * SID)
-                ED = ED + SID
-                EDsclass.append(ED)
-                SIDclass.append(SID)
-                EDtimesSIDclass.append(EDtimesSID)
-
-                if ED < minED:
-                    minED = ED
-            # =================================
-            inde = np.argsort(EDsclass)
-
-            jiaquan = 0
-            for nn in range(0, len(index2)):
-                jiaquandis = EDsclass[inde[nn]] * (float(num_class) ** (-nn))  # 类别内训练集循环 nn
-                jiaquan = jiaquan + jiaquandis
-
-            EDs[j - 1] = jiaquan
-            SIDs[j - 1] = np.min(SIDclass)
-            EDtimesSIDs[j - 1] = np.min(EDtimesSIDclass)
-            ###
-            jiaquan2 = 0
-            inde2 = np.argsort(EDtimesSIDclass)
-            for nn in range(0, len(index2)):
-                jiaquandis = EDtimesSIDclass[inde2[nn]] * (float(num_class) ** (-nn))  # 类别内训练集循环 nn
-                jiaquan2 = jiaquan2 + jiaquandis
-            EDtimesSIDs2[j - 1] = jiaquan2
-        ###
-        # ========================
-        # print("minED:", minED)
-        # if minED>2.71:
-        if np.min(EDtimesSIDs) > 0.085: # TODO: zeros are not ok
-            continue
-        else:
-            minn = np.min(EDs)
-            softm = softmax(16 / EDs)
-            softm2 = softmax(-EDs * num_class)
-            softm3 = softmax(-EDtimesSIDs2 * num_class*100)
-            minn
-
-        labeEDtimesSIDs = np.argmin(EDtimesSIDs) + 1
-        labeEDtimesSIDs2 = np.argmin(EDtimesSIDs2) + 1
-        train_gt[xtest, ytest] = labeEDtimesSIDs2
-        pseudo_labels3[xtest, ytest][1:17] = softm3
-
-
-        if labeEDtimesSIDs == labeltest:
-            trueEDtimesSID.append(1)
-            sumtrueES.append(np.min(EDtimesSIDs))
-        else:
-            trueEDtimesSID.append(0)
-            sumfalseES.append(np.min(EDtimesSIDs))
-            print("falseEDtimesSID:", np.min(EDtimesSIDs))
-
-        if labeEDtimesSIDs2 == labeltest:
-            trueEDtimesSID2.append(1)
-        else:
-            trueEDtimesSID2.append(0)
-
-    accuEDtimesSID2 = np.sum(trueEDtimesSID2) / len(trueEDtimesSID2)
-
-    print("lenEDtimesSID2: %d,accurate:%f, truenum:%d" % (
-    len(trueEDtimesSID2), 100 * accuEDtimesSID2, np.sum(trueEDtimesSID2)))
-    return train_gt,pseudo_labels3
-
-def sample_gt3(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE):
-    X = img
-    Y = gt
+    labels = np.unique(Y)
+    labels = np.array([val for val in labels if not val in IGNORED_LABELS])
+    print(labels)
     row, col, n_band = X.shape
-    num_class = np.max(Y) # TODO: Fix to the correct amount
-    for i in range(1, num_class + 1):
-        index = np.where(train_gt == i)
-        index2 = np.where(test_gt == i)
-
-        if i == 1:
-            array1_train = index[0]
-            array2_train = index[1]
-            array1_test = index2[0]
-            array2_test = index2[1]
+    num_class = len(ALL_LABELS) # TODO: Fix to the correct amount
+    max_class = np.max(ALL_LABELS)
+    # num_class = len(np.unique(labels))
+    first = True
+    skipped_labels = []
+    for i, val in enumerate(ALL_LABELS): # range(1, num_class + 1):
+        if val in labels:
+            index = np.where(train_gt == val)
+            index2 = np.where(test_gt == val)
+            if first:
+                array1_train = index[0]
+                array2_train = index[1]
+                array1_test = index2[0]
+                array2_test = index2[1]
+                first = False
+            else:
+                array1_train = np.concatenate((array1_train, index[0]))
+                array2_train = np.concatenate((array2_train, index[1]))
+                array1_test = np.concatenate((array1_test, index2[0]))
+                array2_test = np.concatenate((array2_test, index2[1]))
         else:
-            array1_train = np.concatenate((array1_train, index[0]))
-            array2_train = np.concatenate((array2_train, index[1]))
-            array1_test = np.concatenate((array1_test, index2[0]))
-            array2_test = np.concatenate((array2_test, index2[1]))
-
+            skipped_labels.append(val)
     y_train = Y[array1_train, array2_train]
     trueEDtimesSID = []
     trueEDtimesSID2 = []
     sumtrueES = []
     sumfalseES = []
-    pseudo_labels3 = np.zeros([row, col, num_class + 1])
+    pseudo_labels3 = np.zeros([row, col, num_class])
     for i in range(0, len(array1_test)):
         if i % 1000 == 0:
             print("i:%d" % (i))
@@ -315,8 +199,124 @@ def sample_gt3(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE):
         EDtimesSIDs = np.zeros(num_class)
         EDtimesSIDs2 = np.zeros(num_class)
         minED = 10000000000
-        #for j in range(1, num_class + 1):  # 类别循环
-        for j in np.unique(gt) + 1:
+        for j, val in enumerate(ALL_LABELS): #range(1, num_class + 1):  # 类别循环
+            if val in labels:
+                index2 = np.where(y_train == val)  ## 当前类别序号
+                index2 = index2[0]
+                EDsclass = []
+                SIDclass = []
+                EDtimesSIDclass = []
+                for nn in range(0, len(index2)):  # 类别内训练集循环 nn
+                    # print(index2[nn])##当前训练样本序号
+                    ind = index2[nn]
+                    xtrain = array1_train[ind]
+                    ytrain = array2_train[ind]
+                    specvectortrain = X[xtrain, ytrain]
+                    ED = np.sqrt(np.square(xtest - xtrain) + np.square(ytest - ytrain))
+                    SID1 = entropy(specvectortest, specvectortrain)
+                    SID2 = entropy(specvectortrain, specvectortest)
+                    SID = SID1 + SID2
+                    EDtimesSID = np.sqrt(ED * SID)
+                    ED = ED + SID
+                    EDsclass.append(ED)
+                    SIDclass.append(SID)
+                    EDtimesSIDclass.append(EDtimesSID)
+
+                    if ED < minED:
+                        minED = ED
+            # =================================
+                inde = np.argsort(EDsclass)
+
+                jiaquan = 0
+                for nn in range(0, len(index2)):
+                    jiaquandis = EDsclass[inde[nn]] * (float(num_class) ** (-nn))  # 类别内训练集循环 nn
+                    jiaquan = jiaquan + jiaquandis
+
+                EDs[j] = jiaquan
+                SIDs[j] = np.min(SIDclass)
+                EDtimesSIDs[j] = np.min(EDtimesSIDclass)
+                jiaquan2 = 0
+                inde2 = np.argsort(EDtimesSIDclass)
+                for nn in range(0, len(index2)):
+                    jiaquandis = EDtimesSIDclass[inde2[nn]] * (float(num_class) ** (-nn))  # 类别内训练集循环 nn
+                    jiaquan2 = jiaquan2 + jiaquandis
+                EDtimesSIDs2[j] = jiaquan2
+            else:
+                EDs[j] = np.nan
+                SIDs[j] = np.nan
+                EDtimesSIDs[j] = np.nan
+                EDtimesSIDs2[j] = np.nan
+        if np.nanmin(EDtimesSIDs) > 0.085:
+            continue
+        else:
+            minn = np.nanmin(EDs)
+            softm3 = softmax_new(-EDtimesSIDs2 * max_class*100)
+            minn
+        labeEDtimesSIDs = np.nanargmin(EDtimesSIDs)
+        labeEDtimesSIDs2 = np.nanargmin(EDtimesSIDs2)
+        train_gt[xtest, ytest] = labeEDtimesSIDs2
+        pseudo_labels3[xtest, ytest][ALL_LABELS] = softm3
+
+
+        if labeEDtimesSIDs == labeltest:
+            trueEDtimesSID.append(1)
+            sumtrueES.append(np.nanmin(EDtimesSIDs))
+        else:
+            trueEDtimesSID.append(0)
+            sumfalseES.append(np.nanmin(EDtimesSIDs))
+            print("falseEDtimesSID:", np.nanmin(EDtimesSIDs))
+
+        if labeEDtimesSIDs2 == labeltest:
+            trueEDtimesSID2.append(1)
+        else:
+            trueEDtimesSID2.append(0)
+    accuEDtimesSID2 = np.sum(trueEDtimesSID2) / len(trueEDtimesSID2)
+
+    print("lenEDtimesSID2: %d,accurate:%f, truenum:%d" % (
+    len(trueEDtimesSID2), 100 * accuEDtimesSID2, np.sum(trueEDtimesSID2)))
+    return train_gt,pseudo_labels3
+
+def sample_gt3(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE):
+    X = img
+    Y = gt
+    row, col, n_band = X.shape
+    num_class = np.max(Y)
+    for i in range(1, num_class + 1):
+        index = np.where(train_gt == i)
+        index2 = np.where(test_gt == i)
+
+        if i == 1:
+            array1_train = index[0]
+            array2_train = index[1]
+            array1_test = index2[0]
+            array2_test = index2[1]
+        else:
+            array1_train = np.concatenate((array1_train, index[0]))
+            array2_train = np.concatenate((array2_train, index[1]))
+            array1_test = np.concatenate((array1_test, index2[0]))
+            array2_test = np.concatenate((array2_test, index2[1]))
+    y_train = Y[array1_train, array2_train]
+    trueEDtimesSID = []
+    trueEDtimesSID2 = []
+    sumtrueES = []
+    sumfalseES = []
+    pseudo_labels3 = np.zeros([row, col, num_class + 1])
+    for i in range(0, len(array1_test)):
+        if i % 1000 == 0:
+            print("i:%d" % (i))
+        #if i%200!=0:
+        #    continue
+        xtest = array1_test[i]
+        ytest = array2_test[i]
+        labeltest = Y[xtest, ytest]
+        specvectortest = X[xtest, ytest]
+        i
+        EDs = np.zeros(num_class)
+        SIDs = np.zeros(num_class)
+        EDtimesSIDs = np.zeros(num_class)
+        EDtimesSIDs2 = np.zeros(num_class)
+        minED = 10000000000
+        for j in range(1, num_class + 1):  # 类别循环
             index2 = np.where(y_train == j)  ## 当前类别序号
             index2 = index2[0]
             EDsclass = []
@@ -370,7 +370,7 @@ def sample_gt3(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE):
             softm2 = softmax(-EDs * num_class)
             softm3 = softmax(-EDtimesSIDs2 * num_class*100)
             minn
-
+        
         labeEDtimesSIDs = np.argmin(EDtimesSIDs) + 1
         labeEDtimesSIDs2 = np.argmin(EDtimesSIDs2) + 1
         train_gt[xtest, ytest] = labeEDtimesSIDs2
@@ -383,18 +383,18 @@ def sample_gt3(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE):
         else:
             trueEDtimesSID.append(0)
             sumfalseES.append(np.min(EDtimesSIDs))
-            print("falseEDtimesSID:", np.min(EDtimesSIDs))
+            # print("falseEDtimesSID:", np.min(EDtimesSIDs))
 
         if labeEDtimesSIDs2 == labeltest:
             trueEDtimesSID2.append(1)
         else:
             trueEDtimesSID2.append(0)
-
     accuEDtimesSID2 = np.sum(trueEDtimesSID2) / len(trueEDtimesSID2)
 
     print("lenEDtimesSID2: %d,accurate:%f, truenum:%d" % (
     len(trueEDtimesSID2), 100 * accuEDtimesSID2, np.sum(trueEDtimesSID2)))
     return train_gt,pseudo_labels3
+
 
 def main(params):
     RUNS = 4
@@ -429,7 +429,7 @@ def main(params):
             os.makedirs(save_path)
 
         datasets_root = '/mnt/data/leevi/'
-        img, gt, LABEL_VALUES, IGNORED_LABELS, _, _ = get_dataset(DATASET, datasets_root)
+        img, gt, LABEL_VALUES, IGNORED_LABELS, ALL_LABELS, _, _ = get_dataset(DATASET, datasets_root)
         X, Y = get_originate_dataset(DATASET, datasets_root)
 
         img = img[:, :, list(range(0, 102, 3))]
@@ -445,7 +445,7 @@ def main(params):
             newdir = str(DATASET) + '/pseudo_labels/pseudo_labels3/'
             if not os.path.exists(newdir):
                 os.makedirs(newdir)
-            _, pseudo_labels3 = sample_gt3(X, Y, train_gt, test_gt, SAMPLE_PERCENTAGE)
+            _, pseudo_labels3 = sample_gt3_new(X, Y, train_gt, test_gt, SAMPLE_PERCENTAGE, IGNORED_LABELS, ALL_LABELS)
             np.save(pseudo_labelpath, pseudo_labels3)
         else:
             pseudo_labels3=np.load(pseudo_labelpath)
