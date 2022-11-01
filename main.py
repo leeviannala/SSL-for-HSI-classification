@@ -16,6 +16,8 @@ import argparse
 from skimage.segmentation import felzenszwalb
 import time
 from scipy.stats import entropy
+from torch.utils.data import DataLoader, TensorDataset
+
 
 
 def get_pseudo_label(segments, TRAIN_Y, gt):
@@ -114,12 +116,12 @@ def pre_data(img, train_gt, params, gt,pseudo_labels3):
     train_IMG, train_Y, train_PL, train_SG = rotation(img, train_gt, pseudo_labels2)
     train_IMG_M, train_Y_M, train_PL_M, train_SG_M = rotation(img, train_gt, pseudo_labels2, Mirror=True)
 
-    image_Column = torch.Tensor(np.stack((train_IMG[0], train_IMG[2], train_IMG_M[0], train_IMG_M[2]), 0)).permute(0, 3,
-                                                                                                                   1, 2)
+    image_Column = torch.Tensor(np.stack((train_IMG[0], train_IMG[2], train_IMG_M[0], train_IMG_M[2]), 0))#.permute(0, 3,
+                                                                                                          #         1, 2)
     y_Column = torch.LongTensor(np.stack((train_Y[0], train_Y[2], train_Y_M[0], train_Y_M[2]), 0).astype(int))
 
-    image_Row = torch.Tensor(np.stack((train_IMG[1], train_IMG[3], train_IMG_M[1], train_IMG_M[3]), 0)).permute(0, 3, 1,
-                                                                                                                2)
+    image_Row = torch.Tensor(np.stack((train_IMG[1], train_IMG[3], train_IMG_M[1], train_IMG_M[3]), 0))#.permute(0, 3, 1,
+                                                                                                       #         2)
     y_Row = torch.LongTensor(np.stack((train_Y[1], train_Y[3], train_Y_M[1], train_Y_M[3]), 0).astype(int))
 
     if train_PL is not None:
@@ -454,7 +456,7 @@ def main(params):
 
         trainnum = np.sum(train_gt > 0)
         print("trainnum:%d" % (trainnum))
-        INPUT_DATA = pre_data(img, train_gt, params, gt,pseudo_labels3)
+        INPUT_DATA = pre_data(img, train_gt, params, gt,pseudo_labels3) # Should the batch size be in pre_data? 
 
         model_DHCN = DHCN(input_size=INPUT_SIZE, embed_size=INPUT_SIZE, densenet_layer=DHCN_LAYERS,
                           output_size=N_CLASSES, conv_size=CONV_SIZE, batch_norm=False).to(device)
@@ -533,29 +535,58 @@ def main(params):
             model_DHCN.train()
 
             loss_supervised, loss_self, loss_distill, loss_distill2 = 0.0, 0.0, 0.0, 0.0
-
+            slices = 0
             for TRAIN_IMG, TRAIN_Y, TRAIN_PL in zip(INPUT_DATA[0], INPUT_DATA[1], INPUT_DATA[2]):
-                scores, _ = model_DHCN(TRAIN_IMG.to(device))
-                for k_Layer in range(DHCN_LAYERS + 1):
-                    for i_num, (k_scores, k_TRAIN_Y) in enumerate(zip(scores[k_Layer], TRAIN_Y)):
-                        k_TRAIN_Y = k_TRAIN_Y.to(device)
-                        loss_supervised += loss_ce(k_scores.permute(1, 2, 0)[k_TRAIN_Y > 0], k_TRAIN_Y[k_TRAIN_Y > 0])
-                        for id_layer, k_TRAIN_PL in enumerate(TRAIN_PL):
-                            k_TRAIN_PL = k_TRAIN_PL.to(device)
-                            if (k_TRAIN_PL[i_num].sum(-1) > 1).sum() > 0:
-                                i_num
-                                #loss_distill += (1 / float(id_layer + 1)) * loss_bce(k_scores.permute(1,2,0).sigmoid()[k_TRAIN_PL[i_num].sum(-1) > 0], k_TRAIN_PL[i_num][k_TRAIN_PL[i_num].sum(-1) > 0])
-                            else:
-                                onehot2label = torch.topk(k_TRAIN_PL[i_num],k=1,dim=-1)[1].squeeze(-1)
-                                loss_self += (1 / float(id_layer + 1)) * loss_ce(k_scores.permute(1,2,0)[onehot2label > 0], onehot2label[onehot2label > 0])
-                                #loss_distill2 += (1 / float(id_layer + 1)) * loss_bce(k_scores.permute(1, 2, 0).sigmoid()[k_TRAIN_PL[i_num].sum(-1) > 0],k_TRAIN_PL[i_num][k_TRAIN_PL[i_num].sum(-1) > 0])
-            loss = loss_supervised + loss_self
+                first = True
+                batch_size = 1000
+                if TRAIN_IMG.shape[1] > TRAIN_IMG.shape[2]:
+                    dataset = TensorDataset(TRAIN_IMG.permute(1,0,2,3), TRAIN_Y.permute(1,0,2), TRAIN_PL[0].permute(1,0,2,3))
+                    dataloader = DataLoader(dataset, batch_size=batch_size)
+                else:
+                    dataset = TensorDataset(TRAIN_IMG.permute(2,1,0,3), TRAIN_Y.permute(2,1,0), TRAIN_PL[0].permute(2,1,0,3))
+                    dataloader = DataLoader(dataset, batch_size=batch_size)
+                    first = False
+                # for i_num, (k_scores, k_TRAIN_Y) in enumerate(zip(scores[k_Layer], TRAIN_Y)):
+                for id_batch, (TRAIN_IMG, TRAIN_Y, TRAIN_PL) in enumerate(dataloader):
+                    if first:
+                        TRAIN_PL = [TRAIN_PL.permute(1,0,2,3)]
+                        TRAIN_Y = TRAIN_Y.permute(1,0,2)
+                        TRAIN_IMG = TRAIN_IMG.permute(1, 3, 0, 2)
+                    else:
+                        TRAIN_PL = [TRAIN_PL.permute(2,1,0,3)]
+                        TRAIN_Y = TRAIN_Y.permute(2,1,0)
+                        TRAIN_IMG = TRAIN_IMG.permute(2,3,1,0)
+                    torch.cuda.empty_cache()
+                    scores, _ = model_DHCN(TRAIN_IMG.to(device))
+                    torch.cuda.empty_cache()
+                    slices += 1
+                    # print(slices)
+                    for k_Layer in range(DHCN_LAYERS + 1):
+                        for i_num, (k_scores, k_TRAIN_Y) in enumerate(zip(scores[k_Layer], TRAIN_Y)):
+                            k_TRAIN_Y = k_TRAIN_Y.to(device)
+                            loss_supervised += loss_ce(k_scores.permute(1, 2, 0)[k_TRAIN_Y > 0], k_TRAIN_Y[k_TRAIN_Y > 0])
+                            for id_layer, k_TRAIN_PL in enumerate(TRAIN_PL):
+                                k_TRAIN_PL = k_TRAIN_PL.to(device)
+                                if (k_TRAIN_PL[i_num].sum(-1) > 1).sum() > 0:
+                                    i_num
+                                    #loss_distill += (1 / float(id_layer + 1)) * loss_bce(k_scores.permute(1,2,0).sigmoid()[k_TRAIN_PL[i_num].sum(-1) > 0], k_TRAIN_PL[i_num][k_TRAIN_PL[i_num].sum(-1) > 0])
+                                else:
+                                    onehot2label = torch.topk(k_TRAIN_PL[i_num],k=1,dim=-1)[1].squeeze(-1)
+                                    loss_self += (1 / float(id_layer + 1)) * loss_ce(k_scores.permute(1,2,0)[onehot2label > 0], onehot2label[onehot2label > 0])
+                                    #loss_distill2 += (1 / float(id_layer + 1)) * loss_bce(k_scores.permute(1, 2, 0).sigmoid()[k_TRAIN_PL[i_num].sum(-1) > 0],k_TRAIN_PL[i_num][k_TRAIN_PL[i_num].sum(-1) > 0])
+                loss = loss_supervised + loss_self
+            # loss = loss.item()
+            torch.cuda.empty_cache()
+            with torch.no_grad():
+                torch.cuda.empty_cache()
+
+
             #loss = loss_supervised
 
-            optimizer_DHCN.zero_grad()
-            nn.utils.clip_grad_norm_(model_DHCN.parameters(), 3.0)
-            loss.backward()
-            optimizer_DHCN.step()
+                optimizer_DHCN.zero_grad()
+                nn.utils.clip_grad_norm_(model_DHCN.parameters(), 3.0)
+                loss.backward()
+                optimizer_DHCN.step()
             internum = 50
             if epoch < 300:
                 internum = 100
