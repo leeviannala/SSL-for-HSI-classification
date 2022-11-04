@@ -106,6 +106,7 @@ def H_segment(img, train_gt, params, gt):
 
 
 def pre_data(img, train_gt, params, gt,pseudo_labels3):
+    start = time.time()
     TRAIN_IMG, TRAIN_Y, TRAIN_PL, TRAIN_SG = [], [], [], []
     #pseudo_labels = H_segment(img, train_gt, params, gt)
     #pseudo_labels2=[pseudo_labels[0]]
@@ -115,7 +116,7 @@ def pre_data(img, train_gt, params, gt,pseudo_labels3):
     ##
     train_IMG, train_Y, train_PL, train_SG = rotation(img, train_gt, pseudo_labels2)
     train_IMG_M, train_Y_M, train_PL_M, train_SG_M = rotation(img, train_gt, pseudo_labels2, Mirror=True)
-
+    print(time.time() - start)
     image_Column = torch.Tensor(np.stack((train_IMG[0], train_IMG[2], train_IMG_M[0], train_IMG_M[2]), 0))#.permute(0, 3,
                                                                                                           #         1, 2)
     y_Column = torch.LongTensor(np.stack((train_Y[0], train_Y[2], train_Y_M[0], train_Y_M[2]), 0).astype(int))
@@ -123,7 +124,7 @@ def pre_data(img, train_gt, params, gt,pseudo_labels3):
     image_Row = torch.Tensor(np.stack((train_IMG[1], train_IMG[3], train_IMG_M[1], train_IMG_M[3]), 0))#.permute(0, 3, 1,
                                                                                                        #         2)
     y_Row = torch.LongTensor(np.stack((train_Y[1], train_Y[3], train_Y_M[1], train_Y_M[3]), 0).astype(int))
-
+    print(time.time() - start)
     if train_PL is not None:
         y_PL_Column, y_PL_Row = [], []
         for k_PL, k_PL_M in zip(train_PL, train_PL_M):
@@ -131,6 +132,7 @@ def pre_data(img, train_gt, params, gt,pseudo_labels3):
             y_PL_Row.append(torch.FloatTensor(np.stack((k_PL[1], k_PL[3], k_PL_M[1], k_PL_M[3]), 0).astype(float)))
         TRAIN_PL.append(y_PL_Column)
         TRAIN_PL.append(y_PL_Row)
+        print(time.time() - start)
     else:
         TRAIN_PL = None
 
@@ -141,6 +143,7 @@ def pre_data(img, train_gt, params, gt,pseudo_labels3):
             y_SG_Row.append(torch.FloatTensor(np.stack((k_SG[1], k_SG[3], k_SG_M[1], k_SG_M[3]), 0).astype(float)))
         TRAIN_SG.append(y_SG_Column)
         TRAIN_SG.append(y_SG_Row)
+        print(time.time() - start)
     else:
         TRAIN_SG = None
 
@@ -148,7 +151,7 @@ def pre_data(img, train_gt, params, gt,pseudo_labels3):
     TRAIN_IMG.append(image_Row)
     TRAIN_Y.append(y_Column)
     TRAIN_Y.append(y_Row)
-
+    print(time.time() - start)
     return TRAIN_IMG, TRAIN_Y, TRAIN_PL, TRAIN_SG
 
 def sample_gt3_new(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE, IGNORED_LABELS, ALL_LABELS):
@@ -457,13 +460,14 @@ def main(params):
         trainnum = np.sum(train_gt > 0)
         print("trainnum:%d" % (trainnum))
         INPUT_DATA = pre_data(img, train_gt, params, gt,pseudo_labels3) # Should the batch size be in pre_data? 
-
+        #np.savez('input_data.npz',
+        #        INPUT_DATA = INPUT_DATA)
         model_DHCN = DHCN(input_size=INPUT_SIZE, embed_size=INPUT_SIZE, densenet_layer=DHCN_LAYERS,
                           output_size=N_CLASSES, conv_size=CONV_SIZE, batch_norm=False).to(device)
         optimizer_DHCN = torch.optim.Adam(model_DHCN.parameters(), lr=LR, betas=(0.5, 0.999), weight_decay=1e-4)
         model_DHCN = nn.DataParallel(model_DHCN)
         loss_ce = nn.CrossEntropyLoss().to(device)
-        loss_bce = nn.BCELoss().to(device)
+        # loss_bce = nn.BCELoss().to(device)
 
         best_ACC, tmp_epoch, tmp_count, tmp_rate, recode_reload, reload_model = 0.0, 0, 0, LR, {}, False
         max_tmp_count = 300
@@ -535,16 +539,17 @@ def main(params):
             model_DHCN.train()
 
             loss_supervised, loss_self, loss_distill, loss_distill2 = 0.0, 0.0, 0.0, 0.0
+            loss = 0.0
             slices = 0
             for TRAIN_IMG, TRAIN_Y, TRAIN_PL in zip(INPUT_DATA[0], INPUT_DATA[1], INPUT_DATA[2]):
                 first = True
-                batch_size = 1000
+                batch_size = 160
                 if TRAIN_IMG.shape[1] > TRAIN_IMG.shape[2]:
                     dataset = TensorDataset(TRAIN_IMG.permute(1,0,2,3), TRAIN_Y.permute(1,0,2), TRAIN_PL[0].permute(1,0,2,3))
-                    dataloader = DataLoader(dataset, batch_size=batch_size)
+                    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
                 else:
                     dataset = TensorDataset(TRAIN_IMG.permute(2,1,0,3), TRAIN_Y.permute(2,1,0), TRAIN_PL[0].permute(2,1,0,3))
-                    dataloader = DataLoader(dataset, batch_size=batch_size)
+                    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
                     first = False
                 # for i_num, (k_scores, k_TRAIN_Y) in enumerate(zip(scores[k_Layer], TRAIN_Y)):
                 for id_batch, (TRAIN_IMG, TRAIN_Y, TRAIN_PL) in enumerate(dataloader):
@@ -556,11 +561,13 @@ def main(params):
                         TRAIN_PL = [TRAIN_PL.permute(2,1,0,3)]
                         TRAIN_Y = TRAIN_Y.permute(2,1,0)
                         TRAIN_IMG = TRAIN_IMG.permute(2,3,1,0)
-                    torch.cuda.empty_cache()
+                    # torch.cuda.empty_cache()
                     scores, _ = model_DHCN(TRAIN_IMG.to(device))
-                    torch.cuda.empty_cache()
+                    # torch.cuda.empty_cache()
                     slices += 1
                     # print(slices)
+                    loss_self = 0.0
+                    loss_supervised = 0.0
                     for k_Layer in range(DHCN_LAYERS + 1):
                         for i_num, (k_scores, k_TRAIN_Y) in enumerate(zip(scores[k_Layer], TRAIN_Y)):
                             k_TRAIN_Y = k_TRAIN_Y.to(device)
@@ -574,19 +581,17 @@ def main(params):
                                     onehot2label = torch.topk(k_TRAIN_PL[i_num],k=1,dim=-1)[1].squeeze(-1)
                                     loss_self += (1 / float(id_layer + 1)) * loss_ce(k_scores.permute(1,2,0)[onehot2label > 0], onehot2label[onehot2label > 0])
                                     #loss_distill2 += (1 / float(id_layer + 1)) * loss_bce(k_scores.permute(1, 2, 0).sigmoid()[k_TRAIN_PL[i_num].sum(-1) > 0],k_TRAIN_PL[i_num][k_TRAIN_PL[i_num].sum(-1) > 0])
-                loss = loss_supervised + loss_self
+                    loss = loss_supervised + loss_self
             # loss = loss.item()
-            torch.cuda.empty_cache()
-            with torch.no_grad():
-                torch.cuda.empty_cache()
-
-
-            #loss = loss_supervised
-
-                optimizer_DHCN.zero_grad()
-                nn.utils.clip_grad_norm_(model_DHCN.parameters(), 3.0)
-                loss.backward()
-                optimizer_DHCN.step()
+                    ## torch.cuda.empty_cache()
+                    #with torch.no_grad():
+                    #    # torch.cuda.empty_cache()
+                    nn.utils.clip_grad_norm_(model_DHCN.parameters(), 3.0)
+                    loss.backward()#retain_graph=True)
+            optimizer_DHCN.step()
+            optimizer_DHCN.zero_grad()
+                    # loss = loss.item()
+                    
             internum = 50
             if epoch < 300:
                 internum = 100
@@ -598,49 +603,66 @@ def main(params):
 
                 p_idx = []
                 fusion_prediction = 0.0
-
+                batch_size = 160
+                
                 for k_data, current_data in enumerate(INPUT_DATA[0]):
-                    scores, _ = model_DHCN(current_data.to(device))
-                    if params.ROT == False:
-                        for k_score in scores:
-                            fusion_prediction += F.softmax(k_score[0].permute(1, 2, 0), dim=-1).cpu().data.numpy()
+                    # current_data = current_data.permute(0, 3, 1, 2)
+                    first = True
+                    if current_data.shape[1] > current_data.shape[2]:
+                        dataset = TensorDataset(current_data.permute(1,0,2,3))
+                        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
                     else:
-                        for k_score in scores:
-                            if k_data == 0:
+                        dataset = TensorDataset(current_data.permute(2,1,0,3))
+                        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+                        first = False
+                    # for i_num, (k_scores, k_TRAIN_Y) in enumerate(zip(scores[k_Layer], TRAIN_Y)):
+                    for id_batch, current_data in enumerate(dataloader):
+                        if first:
+                            current_data = current_data[0].permute(1, 3, 0, 2)
+                        else:
+                            current_data = current_data[0].permute(2,3,1,0)
+                    
+                        scores, _ = model_DHCN(current_data.to(device))
+                        if params.ROT == False:
+                            for k_score in scores:
                                 fusion_prediction += F.softmax(k_score[0].permute(1, 2, 0), dim=-1).cpu().data.numpy()
-                                fusion_prediction += np.rot90(
-                                    F.softmax(k_score[1].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=2, axes=(0, 1))
-                                fusion_prediction += F.softmax(k_score[2].permute(1, 2, 0), dim=-1).cpu().data.numpy()[
-                                                     ::-1, :, :]
-                                fusion_prediction += np.rot90(
-                                    F.softmax(k_score[3].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=2,
-                                    axes=(0, 1))[::-1, :, :]
+                        else:
+                            for k_score in scores:
+                                if k_data == 0:
+                                    fusion_prediction += F.softmax(k_score[0].permute(1, 2, 0), dim=-1).cpu().data.numpy()
+                                    fusion_prediction += np.rot90(
+                                        F.softmax(k_score[1].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=2, axes=(0, 1))
+                                    fusion_prediction += F.softmax(k_score[2].permute(1, 2, 0), dim=-1).cpu().data.numpy()[
+                                                        ::-1, :, :]
+                                    fusion_prediction += np.rot90(
+                                        F.softmax(k_score[3].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=2,
+                                        axes=(0, 1))[::-1, :, :]
 
-                                p_idx.append(k_score[0].max(0)[-1].cpu().data.numpy())
-                                p_idx.append(np.rot90(k_score[1].max(0)[-1].cpu().data.numpy(), k=2, axes=(0, 1)))
-                                p_idx.append(k_score[2].max(0)[-1].cpu().data.numpy()[::-1, :])
-                                p_idx.append(
-                                    np.rot90(k_score[3].max(0)[-1].cpu().data.numpy(), k=2, axes=(0, 1))[::-1, :])
+                                    p_idx.append(k_score[0].max(0)[-1].cpu().data.numpy())
+                                    p_idx.append(np.rot90(k_score[1].max(0)[-1].cpu().data.numpy(), k=2, axes=(0, 1)))
+                                    p_idx.append(k_score[2].max(0)[-1].cpu().data.numpy()[::-1, :])
+                                    p_idx.append(
+                                        np.rot90(k_score[3].max(0)[-1].cpu().data.numpy(), k=2, axes=(0, 1))[::-1, :])
 
-                            if k_data == 1:
-                                fusion_prediction += np.rot90(
-                                    F.softmax(k_score[0].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=-1,
-                                    axes=(0, 1))
-                                fusion_prediction += np.rot90(
-                                    F.softmax(k_score[1].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=1, axes=(0, 1))
-                                fusion_prediction += np.rot90(
-                                    F.softmax(k_score[2].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=-1,
-                                    axes=(0, 1))[::-1, :, :]
-                                fusion_prediction += np.rot90(
-                                    F.softmax(k_score[3].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=1,
-                                    axes=(0, 1))[::-1, :, :]
+                                if k_data == 1:
+                                    fusion_prediction += np.rot90(
+                                        F.softmax(k_score[0].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=-1,
+                                        axes=(0, 1))
+                                    fusion_prediction += np.rot90(
+                                        F.softmax(k_score[1].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=1, axes=(0, 1))
+                                    fusion_prediction += np.rot90(
+                                        F.softmax(k_score[2].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=-1,
+                                        axes=(0, 1))[::-1, :, :]
+                                    fusion_prediction += np.rot90(
+                                        F.softmax(k_score[3].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=1,
+                                        axes=(0, 1))[::-1, :, :]
 
-                                p_idx.append(np.rot90(k_score[0].max(0)[-1].cpu().data.numpy(), k=-1, axes=(0, 1)))
-                                p_idx.append(np.rot90(k_score[1].max(0)[-1].cpu().data.numpy(), k=1, axes=(0, 1)))
-                                p_idx.append(
-                                    np.rot90(k_score[2].max(0)[-1].cpu().data.numpy(), k=-1, axes=(0, 1))[::-1, :])
-                                p_idx.append(
-                                    np.rot90(k_score[3].max(0)[-1].cpu().data.numpy(), k=1, axes=(0, 1))[::-1, :])
+                                    p_idx.append(np.rot90(k_score[0].max(0)[-1].cpu().data.numpy(), k=-1, axes=(0, 1)))
+                                    p_idx.append(np.rot90(k_score[1].max(0)[-1].cpu().data.numpy(), k=1, axes=(0, 1)))
+                                    p_idx.append(
+                                        np.rot90(k_score[2].max(0)[-1].cpu().data.numpy(), k=-1, axes=(0, 1))[::-1, :])
+                                    p_idx.append(
+                                        np.rot90(k_score[3].max(0)[-1].cpu().data.numpy(), k=1, axes=(0, 1))[::-1, :])
 
                 Acc = np.zeros([len(p_idx) + 1])
                 for count, k_idx in enumerate(p_idx):
