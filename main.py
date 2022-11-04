@@ -536,7 +536,8 @@ def main(params):
 
             loss_supervised, loss_self, loss_distill, loss_distill2 = 0.0, 0.0, 0.0, 0.0
             for TRAIN_IMG, TRAIN_Y, TRAIN_PL in zip(INPUT_DATA[0], INPUT_DATA[1], INPUT_DATA[2]):
-                scores, _ = model_DHCN(TRAIN_IMG.to(device))
+                TRAIN_IMG = TRAIN_IMG.to(device)
+                scores, _ = model_DHCN(TRAIN_IMG) # Tries to put 4, 16000, 600, 150 shape into gpu. 150x150x150
                 for k_Layer in range(DHCN_LAYERS + 1):
                     for i_num, (k_scores, k_TRAIN_Y) in enumerate(zip(scores[k_Layer], TRAIN_Y)):
                         k_TRAIN_Y = k_TRAIN_Y.to(device)
