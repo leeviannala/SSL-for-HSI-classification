@@ -437,14 +437,17 @@ def main(params):
         img, gt, LABEL_VALUES, IGNORED_LABELS, ALL_LABELS, _, _ = get_dataset(DATASET, datasets_root)
         X, Y = get_originate_dataset(DATASET, datasets_root)
 
-        img = img[:, :, list(range(0, 102, 3))]
+        img = img[:, :, list(range(0, 102, 3))] # Why is this here? This takes the every third channel from every dataset.
+                                                # The end point being fixed at 102 might be a problem. 
+                                                # On the other hand no similar thing is done to X, which is supposedly
+                                                # the same image. 
 
         N_CLASSES = len(LABEL_VALUES)
         INPUT_SIZE = np.shape(img)[-1]
         # train_gt, test_gt = sample_gt(gt, SAMPLE_PERCENTAGE, mode='fixed')
         train_gt, test_gt = sample_gt(gt, SAMPLE_PERCENTAGE, mode='fixed')
         #train_gt = sample_gt2(X, Y, train_gt, test_gt, SAMPLE_PERCENTAGE)
-
+        # breakpoint()
         pseudo_labelpath= str(DATASET) + '/pseudo_labels/pseudo_labels3/pseudo_labels3.npy'
         if not os.path.exists(pseudo_labelpath):
             newdir = str(DATASET) + '/pseudo_labels/pseudo_labels3/'
@@ -472,6 +475,7 @@ def main(params):
         best_ACC, tmp_epoch, tmp_count, tmp_rate, recode_reload, reload_model = 0.0, 0, 0, LR, {}, False
         max_tmp_count = 300
 
+        # No need to touch stuff below.
         for epoch in range(MX_ITER):
             if epoch % 100 == 0:
                 print("epoch: %d" % (epoch))
@@ -535,7 +539,7 @@ def main(params):
                 pretrain = torch.load(pretrained_model)
                 model_DHCN.load_state_dict(pretrain['state_dict_DHCN'])
                 reload_model = False
-
+            # No need to touch stuff above.
             model_DHCN.train()
 
             loss_supervised, loss_self, loss_distill, loss_distill2 = 0.0, 0.0, 0.0, 0.0
@@ -543,7 +547,7 @@ def main(params):
             slices = 0
             for TRAIN_IMG, TRAIN_Y, TRAIN_PL in zip(INPUT_DATA[0], INPUT_DATA[1], INPUT_DATA[2]):
                 first = True
-                batch_size = 160
+                batch_size = 80
                 if TRAIN_IMG.shape[1] > TRAIN_IMG.shape[2]:
                     dataset = TensorDataset(TRAIN_IMG.permute(1,0,2,3), TRAIN_Y.permute(1,0,2), TRAIN_PL[0].permute(1,0,2,3))
                     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -588,8 +592,8 @@ def main(params):
                     #    # torch.cuda.empty_cache()
                     nn.utils.clip_grad_norm_(model_DHCN.parameters(), 3.0)
                     loss.backward()#retain_graph=True)
-            optimizer_DHCN.step()
-            optimizer_DHCN.zero_grad()
+                    optimizer_DHCN.step()
+                    optimizer_DHCN.zero_grad()
                     # loss = loss.item()
                     
             internum = 50
@@ -604,37 +608,40 @@ def main(params):
                 p_idx = []
                 fusion_prediction = 0.0
                 batch_size = 160
-                
-                for k_data, current_data in enumerate(INPUT_DATA[0]):
+                test_gt_tiled = np.tile(test_gt.flatten(), 4).reshape(4, test_gt.shape[0], test_gt.shape[1])
+                tgts = []
+                fusion_predictions = []
+                for k_data, (current_data, tgt) in enumerate(zip(INPUT_DATA[0], test_gt_tiled)):
                     # current_data = current_data.permute(0, 3, 1, 2)
                     first = True
                     if current_data.shape[1] > current_data.shape[2]:
-                        dataset = TensorDataset(current_data.permute(1,0,2,3))
-                        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+                        dataset = TensorDataset(current_data.permute(1,0,2,3), torch.tensor(tgt).permute(1,0,2))
+                        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
                     else:
-                        dataset = TensorDataset(current_data.permute(2,1,0,3))
-                        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+                        dataset = TensorDataset(current_data.permute(2,1,0,3), torch.tensor(tgt).permute(1,0,2))
+                        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
                         first = False
+                    fusion_prediction_helper = []
                     # for i_num, (k_scores, k_TRAIN_Y) in enumerate(zip(scores[k_Layer], TRAIN_Y)):
-                    for id_batch, current_data in enumerate(dataloader):
+                    for id_batch, (current_data, tgt) in enumerate(dataloader):
                         if first:
                             current_data = current_data[0].permute(1, 3, 0, 2)
                         else:
                             current_data = current_data[0].permute(2,3,1,0)
-                    
+                        fusion_prediction_batch = 0.0
                         scores, _ = model_DHCN(current_data.to(device))
                         if params.ROT == False:
                             for k_score in scores:
-                                fusion_prediction += F.softmax(k_score[0].permute(1, 2, 0), dim=-1).cpu().data.numpy()
+                                fusion_prediction_batch += F.softmax(k_score[0].permute(1, 2, 0), dim=-1).cpu().data.numpy()
                         else:
                             for k_score in scores:
                                 if k_data == 0:
-                                    fusion_prediction += F.softmax(k_score[0].permute(1, 2, 0), dim=-1).cpu().data.numpy()
-                                    fusion_prediction += np.rot90(
+                                    fusion_prediction_batch += F.softmax(k_score[0].permute(1, 2, 0), dim=-1).cpu().data.numpy()
+                                    fusion_prediction_batch += np.rot90(
                                         F.softmax(k_score[1].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=2, axes=(0, 1))
-                                    fusion_prediction += F.softmax(k_score[2].permute(1, 2, 0), dim=-1).cpu().data.numpy()[
+                                    fusion_prediction_batch += F.softmax(k_score[2].permute(1, 2, 0), dim=-1).cpu().data.numpy()[
                                                         ::-1, :, :]
-                                    fusion_prediction += np.rot90(
+                                    fusion_prediction_batch += np.rot90(
                                         F.softmax(k_score[3].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=2,
                                         axes=(0, 1))[::-1, :, :]
 
@@ -643,17 +650,17 @@ def main(params):
                                     p_idx.append(k_score[2].max(0)[-1].cpu().data.numpy()[::-1, :])
                                     p_idx.append(
                                         np.rot90(k_score[3].max(0)[-1].cpu().data.numpy(), k=2, axes=(0, 1))[::-1, :])
-
+                                    breakpoint()
                                 if k_data == 1:
-                                    fusion_prediction += np.rot90(
+                                    fusion_prediction_batch += np.rot90(
                                         F.softmax(k_score[0].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=-1,
                                         axes=(0, 1))
-                                    fusion_prediction += np.rot90(
+                                    fusion_prediction_batch += np.rot90(
                                         F.softmax(k_score[1].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=1, axes=(0, 1))
-                                    fusion_prediction += np.rot90(
+                                    fusion_prediction_batch += np.rot90(
                                         F.softmax(k_score[2].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=-1,
                                         axes=(0, 1))[::-1, :, :]
-                                    fusion_prediction += np.rot90(
+                                    fusion_prediction_batch += np.rot90(
                                         F.softmax(k_score[3].permute(1, 2, 0), dim=-1).cpu().data.numpy(), k=1,
                                         axes=(0, 1))[::-1, :, :]
 
@@ -663,23 +670,39 @@ def main(params):
                                         np.rot90(k_score[2].max(0)[-1].cpu().data.numpy(), k=-1, axes=(0, 1))[::-1, :])
                                     p_idx.append(
                                         np.rot90(k_score[3].max(0)[-1].cpu().data.numpy(), k=1, axes=(0, 1))[::-1, :])
-
+                                    breakpoint()
+                                tgts.append(tgt.permute(1,0,2))
+                                tgts.append(tgt.permute(1,0,2))
+                                tgts.append(tgt.permute(1,0,2))
+                                tgts.append(tgt.permute(1,0,2))
+                        fusion_prediction_helper.append(fusion_prediction_batch)
+                    fusion_predictions.append(np.concatenate(fusion_prediction_helper))
+                fusion_predictions = np.array(fusion_predictions)
+                fusion_prediction = np.sum(fusion_predictions, axis=0)
                 Acc = np.zeros([len(p_idx) + 1])
+                # breakpoint()
+                #dataset_test_gt = TensorDataset(torch.tensor(test_gt))
+                #dataloader_test_gt = DataLoader(dataset_test_gt, batch_size=batch_size, shuffle=False)
+                #dataloader_list = np.repeat(list(dataloader_test_gt), 4)
+                #dataloader_list = np.tile(dataloader_list, 4)
                 for count, k_idx in enumerate(p_idx):
-                    Acc[count] = \
-                    metrics(k_idx.reshape(img.shape[:2]), test_gt, ignored_labels=IGNORED_LABELS, n_classes=N_CLASSES)[
-                        'Accuracy']
-                Acc[-1] = \
-                metrics(fusion_prediction.argmax(-1).reshape(img.shape[:2]), test_gt, ignored_labels=IGNORED_LABELS,
-                        n_classes=N_CLASSES)['Accuracy']
+                    # breakpoint()
+                    Acc[count] = metrics(
+                        k_idx.reshape(batch_size, img.shape[1]), tgts[count], 
+                        ignored_labels=IGNORED_LABELS, n_classes=N_CLASSES)['Accuracy']
+                Acc[-1] = metrics(
+                    fusion_prediction.argmax(-1).reshape(img.shape[:2]), test_gt, ignored_labels=IGNORED_LABELS,
+                    n_classes=N_CLASSES)['Accuracy'] # TODO: This calculates probably wrong thing. Probably fixed TODO: Check
                 OA,AA=calprecision(fusion_prediction.argmax(-1).reshape(img.shape[:2]), test_gt,n_classes=N_CLASSES)
                 kappa=metrics(fusion_prediction.argmax(-1).reshape(img.shape[:2]), test_gt, ignored_labels=IGNORED_LABELS,
                         n_classes=N_CLASSES)['Kappa']
 
                 tmp_count += 1
 
-                if max(Acc) > best_ACC:
-                    best_ACC = max(Acc)
+                # if max(Acc) > best_ACC:
+                if Acc[-1] > best_ACC:
+                    # best_ACC = max(Acc)
+                    best_ACC = Acc[-1]
                     save_file_path = save_path + 'save_' + str(epoch) + '_' + str(round(best_ACC, 2)) + '.pth'
                     states = {'state_dict_DHCN': model_DHCN.state_dict(),
                               'train_gt': train_gt,
@@ -691,7 +714,7 @@ def main(params):
                     tmp_epoch = epoch
                     print('save: ', epoch, str(round(best_ACC, 2)))
                     print('save: %d, OA: %f AA: %f Kappa: %f' %(epoch, OA,AA,kappa))
-                    #print(loss_supervised.data, loss_self.data, loss_distill.data)
+                    # print(loss_supervised.data, loss_self.data, loss_distill.data)
                     print(loss_supervised.data)
                     print(np.round(Acc, 2))
 
@@ -709,7 +732,7 @@ def parse_args():
     parser.add_argument('--ROT', default=True, type=bool)  # False
     parser.add_argument('--MIRROR', default=True, type=bool)  # False
     parser.add_argument('--H_MIRROR', default='full', type=str)  # half, full
-    parser.add_argument('--GPU', default='0,1,2,3', type=str)  # 0,1,2,3
+    parser.add_argument('--GPU', default='0', type=str)  # 0,1,2,3
 
     parser.add_argument('--ROT_N', default=1, type=int)  # False
     parser.add_argument('--MIRROR_N', default=1, type=int)  # False

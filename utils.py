@@ -325,28 +325,33 @@ def metrics(prediction, target, ignored_labels=[], n_classes=None):
 
     # Compute global accuracy
     total = np.sum(cm)
-    accuracy = sum([cm[x][x] for x in range(len(cm))])
-    accuracy *= 100 / float(total)
+    if total == 0:
+        results["Accuracy"] = np.nan
+        results["F1 scores"] = np.nan
+        results["Kappa"] = np.nan
+    else:
+        accuracy = sum([cm[x][x] for x in range(len(cm))])
+        accuracy *= 100 / float(total)
 
-    results["Accuracy"] = accuracy
+        results["Accuracy"] = accuracy
 
-    # Compute F1 score
-    F1scores = np.zeros(len(cm))
-    for i in range(len(cm)):
-        try:
-            F1 = 2. * cm[i, i] / (np.sum(cm[i, :]) + np.sum(cm[:, i]))
-        except ZeroDivisionError:
-            F1 = 0.
-        F1scores[i] = F1
+        # Compute F1 score
+        F1scores = np.zeros(len(cm))
+        for i in range(len(cm)):
+            try:
+                F1 = 2. * cm[i, i] / (np.sum(cm[i, :]) + np.sum(cm[:, i]))
+            except ZeroDivisionError:
+                F1 = 0.
+            F1scores[i] = F1
 
-    results["F1 scores"] = F1scores
+        results["F1 scores"] = F1scores
 
-    # Compute kappa coefficient
-    pa = np.trace(cm) / float(total)
-    pe = np.sum(np.sum(cm, axis=0) * np.sum(cm, axis=1)) / \
-        float(total * total)
-    kappa = (pa - pe) / (1 - pe)
-    results["Kappa"] = kappa
+        # Compute kappa coefficient
+        pa = np.trace(cm) / float(total)
+        pe = np.sum(np.sum(cm, axis=0) * np.sum(cm, axis=1)) / \
+            float(total * total)
+        kappa = (pa - pe) / (1 - pe)
+        results["Kappa"] = kappa
 
     return results
 
