@@ -257,8 +257,12 @@ def sample_gt3_new(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE, IGNORED_LABELS
             minn = np.nanmin(EDs)
             softm3 = softmax_new(-EDtimesSIDs2 * max_class*100)
             minn
-        labeEDtimesSIDs = np.nanargmin(EDtimesSIDs)
-        labeEDtimesSIDs2 = np.nanargmin(EDtimesSIDs2)
+        try:
+            labeEDtimesSIDs = np.nanargmin(EDtimesSIDs)
+            labeEDtimesSIDs2 = np.nanargmin(EDtimesSIDs2)
+        except ValueError:
+            labeEDtimesSIDs = np.argmin(EDtimesSIDs)
+            labeEDtimesSIDs2 = np.argmin(EDtimesSIDs2)
         train_gt[xtest, ytest] = labeEDtimesSIDs2
         pseudo_labels3[xtest, ytest][ALL_LABELS] = softm3
 
@@ -401,6 +405,71 @@ def sample_gt3(img, gt, train_gt, test_gt, SAMPLE_PERCENTAGE):
     return train_gt,pseudo_labels3
 
 
+def single_pad(pad_value):
+        if pad_value%2 == 0:
+            return [int(pad_value/2), int(pad_value/2)]
+        else:
+            return [int(pad_value/2), int(pad_value/2) + 1]
+
+
+def calc_pad(mx, shape, axes):
+    pad_values = mx - shape
+    pads = [[0,0], [0,0], [0,0]]
+    for axis in axes:
+        #print(i)
+        #print(i in axes)
+        pads[axis] = (single_pad(pad_values[axis]))
+    # print(pads)
+    return pads
+    
+
+def concat_with_padding(list_of_arrays, padding_axes):
+    shape1s = [i.shape for i in list_of_arrays]
+    max_shape = np.max(shape1s, axis=0)
+    #max_shape = np.array(img[-1].shape)
+    pads = [calc_pad(max_shape, i, padding_axes) for i in shape1s]
+    img2 = [np.pad(list_of_arrays[i], pad) for i, pad in enumerate(pads)]
+    res2 = np.concatenate(img2)
+    return res2
+
+
+def load_datasets(DATASET, datasets_root, SAMPLE_PERCENTAGE):
+    img, gt, LABEL_VALUES, IGNORED_LABELS, ALL_LABELS, _, _ = get_dataset(DATASET, datasets_root)
+    X, Y = get_originate_dataset(DATASET, datasets_root)
+    img = concat_with_padding(img, [1])
+    img = img[:, :, list(range(0, 102, 3))] # Why is this here? This takes the every third channel from every dataset.
+                                            # The end point being fixed at 102 might be a problem. 
+                                            # On the other hand no similar thing is done to X, which is supposedly
+                                            # the same image. 
+
+    N_CLASSES = len(LABEL_VALUES)
+    INPUT_SIZE = np.shape(img)[-1]
+    # train_gt, test_gt = sample_gt(gt, SAMPLE_PERCENTAGE, mode='fixed')
+    train_test_gt = [sample_gt(i, SAMPLE_PERCENTAGE, mode='fixed') for i in gt]
+    #train_gt = sample_gt2(X, Y, train_gt, test_gt, SAMPLE_PERCENTAGE)
+    # # # breakpoint()
+    pseudo_labelpath= '../' + str(DATASET) + f'/pseudo_labels/pseudo_labels3/pseudo_labels3_{SAMPLE_PERCENTAGE}.npy'
+    pseudo_labels3 = []
+    if not os.path.exists(pseudo_labelpath):
+        newdir = str(DATASET) + '/pseudo_labels/pseudo_labels3/'
+        if not os.path.exists(newdir):
+            os.makedirs(newdir)
+        for x, y, tr_te_gt in zip(X, Y, train_test_gt):
+            pseudo_labels3.append(sample_gt3_new(x, y, tr_te_gt[0], tr_te_gt[1], 
+                                                 SAMPLE_PERCENTAGE, IGNORED_LABELS, ALL_LABELS)[1])
+        pseudo_labels3 = concat_with_padding(pseudo_labels3, [1])
+        np.save(pseudo_labelpath, pseudo_labels3)
+    else:
+        pseudo_labels3=np.load(pseudo_labelpath)
+    train_gt = concat_with_padding([i[0] for i in train_test_gt], [1])
+    test_gt = concat_with_padding([i[1] for i in train_test_gt], [1])
+    gt = concat_with_padding(gt, [1]) 
+    X = concat_with_padding(X, [1])
+    Y = concat_with_padding(Y, [1])
+    return img, gt, LABEL_VALUES, IGNORED_LABELS, ALL_LABELS, X, Y, N_CLASSES,\
+           INPUT_SIZE, train_gt, test_gt, pseudo_labels3
+
+
 def main(params):
     RUNS = 4
     MX_ITER = 1000000000
@@ -432,31 +501,34 @@ def main(params):
         save_path = str(DATASET) + '/tmp' + str(params.GPU) + '_abc/'
         if not os.path.exists(save_path):
             os.makedirs(save_path)
-
         datasets_root = '/mnt/data/leevi/'
-        img, gt, LABEL_VALUES, IGNORED_LABELS, ALL_LABELS, _, _ = get_dataset(DATASET, datasets_root)
-        X, Y = get_originate_dataset(DATASET, datasets_root)
+        # if str(DATASET) == 'hyrank':
+        img, gt, LABEL_VALUES, IGNORED_LABELS, ALL_LABELS, X, Y, \
+            N_CLASSES, INPUT_SIZE, train_gt, test_gt, pseudo_labels3 = load_datasets(DATASET, datasets_root, SAMPLE_PERCENTAGE)
+        # else:
+        #img, gt, LABEL_VALUES, IGNORED_LABELS, ALL_LABELS, _, _ = get_dataset(DATASET, datasets_root)
+        #X, Y = get_originate_dataset(DATASET, datasets_root)
 
-        img = img[:, :, list(range(0, 102, 3))] # Why is this here? This takes the every third channel from every dataset.
+        #img = img[:, :, list(range(0, 102, 3))] # Why is this here? This takes the every third channel from every dataset.
                                                 # The end point being fixed at 102 might be a problem. 
                                                 # On the other hand no similar thing is done to X, which is supposedly
                                                 # the same image. 
 
-        N_CLASSES = len(LABEL_VALUES)
-        INPUT_SIZE = np.shape(img)[-1]
+        #N_CLASSES = len(LABEL_VALUES)
+        #INPUT_SIZE = np.shape(img)[-1]
         # train_gt, test_gt = sample_gt(gt, SAMPLE_PERCENTAGE, mode='fixed')
-        train_gt, test_gt = sample_gt(gt, SAMPLE_PERCENTAGE, mode='fixed')
+        #train_gt, test_gt = sample_gt(gt, SAMPLE_PERCENTAGE, mode='fixed')
         #train_gt = sample_gt2(X, Y, train_gt, test_gt, SAMPLE_PERCENTAGE)
         # # # breakpoint()
-        pseudo_labelpath= str(DATASET) + '/pseudo_labels/pseudo_labels3/pseudo_labels3.npy'
-        if not os.path.exists(pseudo_labelpath):
-            newdir = str(DATASET) + '/pseudo_labels/pseudo_labels3/'
-            if not os.path.exists(newdir):
-                os.makedirs(newdir)
-            _, pseudo_labels3 = sample_gt3_new(X, Y, train_gt, test_gt, SAMPLE_PERCENTAGE, IGNORED_LABELS, ALL_LABELS)
-            np.save(pseudo_labelpath, pseudo_labels3)
-        else:
-            pseudo_labels3=np.load(pseudo_labelpath)
+        #pseudo_labelpath= str(DATASET) + '/pseudo_labels/pseudo_labels3/pseudo_labels3.npy'
+        #if not os.path.exists(pseudo_labelpath):
+        #    newdir = str(DATASET) + '/pseudo_labels/pseudo_labels3/'
+        #    if not os.path.exists(newdir):
+        #        os.makedirs(newdir)
+        #    _, pseudo_labels3 = sample_gt3_new(X, Y, train_gt, test_gt, SAMPLE_PERCENTAGE, IGNORED_LABELS, ALL_LABELS)
+        #    np.save(pseudo_labelpath, pseudo_labels3)
+        #else:
+        #    pseudo_labels3=np.load(pseudo_labelpath)
 
 
 
@@ -482,7 +554,7 @@ def main(params):
             current_time = time.time()
             if current_time - start_time > 28800:
 
-                print(f'Training end due to current_time={current_time}')
+                print(f'Training end due to current_time={current_time-start_time}')
                 old_path = save_path + 'save_' + str(tmp_epoch) + '_' + str(round(best_ACC, 2)) + '.pth'
                 new_path = str(DATASET) + '/Best/' + '_'.join(
                     [str(params.SAMPLE_PERCENTAGE), str(params.DHCN_LAYERS), str(params.CONV_SIZE), str(params.ROT),

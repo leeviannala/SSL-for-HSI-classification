@@ -507,6 +507,8 @@ def sample_gt(gt, train_size, mode='random'):
 def softmax_new(x):
     ret = np.zeros(x.shape)
     filt = x == x
+    if len(x[np.where(filt)]) < 1:
+        return ret
     x_new = np.nan_to_num(x[np.where(filt)])
     x_row_max = np.nanmax(x_new, axis=-1)
     x_row_max = x_row_max.reshape(list(x_new.shape)[:-1] + [1])

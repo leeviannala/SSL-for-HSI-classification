@@ -138,6 +138,8 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
         all_labels = np.arange(len(label_values))
 
         ignored_labels = [0]
+        img = [img]
+        gt = [gt]
 
     elif dataset_name == 'PaviaU':
         # Load the image
@@ -153,6 +155,8 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
         all_labels = np.arange(len(label_values))
 
         ignored_labels = [0]
+        img = [img]
+        gt = [gt]
 
     elif dataset_name == 'IndianPines':
         # Load the image
@@ -171,6 +175,8 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
         all_labels = np.arange(len(label_values))
 
         ignored_labels = [0]
+        img = [img]
+        gt = [gt]
     elif dataset_name == 'Houston':
         # Load the image
         img = open_file(folder + 'Houston.mat')
@@ -187,6 +193,8 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
         all_labels = np.arange(len(label_values))
 
         ignored_labels = [0]
+        img = [img]
+        gt = [gt]
     elif dataset_name == 'Botswana':
         # Load the image
         img = open_file(folder + 'Botswana.mat')['Botswana']
@@ -203,7 +211,8 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
 
         all_labels = np.arange(len(label_values))
         ignored_labels = [0]
-
+        img = [img]
+        gt = [gt]
     elif dataset_name == 'KSC':
         # Load the image
         img = open_file(folder + 'KSC.mat')['KSC']
@@ -219,12 +228,27 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
 
         all_labels = np.arange(len(label_values))
         ignored_labels = [0]
+        img = [img]
+        gt = [gt]
     elif dataset_name == 'hyrank':
-        img = open_file(folder + 'Training Set/Anafi.tif')
+        files = ['Training Set/Anafi.tif',
+                 'Training Set/Atokos.tif',
+                 'Training Set/Donousa.tif',
+                 'Validation Set/Kasos.tif',
+                 'Validation Set/Tilos.tif',
+                ]
+        
+        files_gt = ['Training Set/Anafi_GT.tif',
+                    'Training Set/Atokos_GT.tif',
+                    'Training Set/Donousa_GT.tif',
+                    'Validation Set/Kasos_GT.tif',
+                    'Validation Set/Tilos_GT.tif',
+                    ]
+        img = [open_file(folder + i) for i in files]
 
         rgb_bands = [30,20,2]
 
-        gt = open_file(folder + 'Training Set/Anafi_GT.tif')
+        gt = [open_file(folder + i) for i in files_gt]
 
         label_values = ['Undefined',
                         'High intensity developed', 
@@ -252,23 +276,25 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
     else:
         # Custom dataset
         img, gt, rgb_bands, ignored_labels, label_values, palette = CUSTOM_DATASETS_CONFIG[dataset_name]['loader'](folder)
-
+        img = [img]
+        gt = [gt]
     # Filter NaN out
-    nan_mask = np.isnan(img.sum(axis=-1))
-    if np.count_nonzero(nan_mask) > 0:
-       print("Warning: NaN have been found in the data. It is preferable to remove them beforehand. Learning on NaN data is disabled.")
-    img[nan_mask] = 0
-    gt[nan_mask] = 0
-    ignored_labels.append(0)
+    for i, im in enumerate(img):
+        nan_mask = np.isnan(im.sum(axis=-1))
+        if np.count_nonzero(nan_mask) > 0:
+            print("Warning: NaN have been found in the data. It is preferable to remove them beforehand. Learning on NaN data is disabled.")
+            img[i][nan_mask] = 0
+            gt[i][nan_mask] = 0
+            ignored_labels.append(0)
 
+        # Normalization
+        im = np.asarray(im, dtype='float32')
+        #img = (img - np.min(img)) / (np.max(img) - np.min(img))
+        data = im.reshape(np.prod(im.shape[:2]), np.prod(im.shape[2:]))
+        #data = preprocessing.scale(data)
+        data  = preprocessing.minmax_scale(data)
+        img[i] = data.reshape(im.shape)
     ignored_labels = list(set(ignored_labels))
-    # Normalization
-    img = np.asarray(img, dtype='float32')
-    #img = (img - np.min(img)) / (np.max(img) - np.min(img))
-    data = img.reshape(np.prod(img.shape[:2]), np.prod(img.shape[2:]))
-    #data = preprocessing.scale(data)
-    data  = preprocessing.minmax_scale(data)
-    img = data.reshape(img.shape)
     return img, gt, label_values, ignored_labels, all_labels, rgb_bands, palette
 
 
@@ -286,28 +312,52 @@ def get_originate_dataset(dataset_name, target_folder="./", datasets=DATASETS_CO
     if dataset_name == 'PaviaC':
         img = open_file(folder + 'Pavia.mat')['pavia']
         gt = open_file(folder + 'Pavia_gt.mat')['pavia_gt']
+        img = [img]
+        gt = [gt]
     elif dataset_name == 'PaviaU':
         img = open_file(folder + 'PaviaU.mat')['paviaU']
         gt = open_file(folder + 'PaviaU_gt.mat')['paviaU_gt']
+        img = [img]
+        gt = [gt]
     elif dataset_name == 'IndianPines':
         img = open_file(folder + 'Indian_pines_corrected.mat')
         img = img['indian_pines_corrected']
         rgb_bands = (43, 21, 11)  # AVIRIS sensor
         gt = open_file(folder + 'Indian_pines_gt.mat')['indian_pines_gt']
+        img = [img]
+        gt = [gt]
     elif dataset_name == 'Botswana':
         img = open_file(folder + 'Botswana.mat')['Botswana']
         gt = open_file(folder + 'Botswana_gt.mat')['Botswana_gt']
+        img = [img]
+        gt = [gt]
     elif dataset_name == 'KSC':
         img = open_file(folder + 'KSC.mat')['KSC']
         gt = open_file(folder + 'KSC_gt.mat')['KSC_gt']
+        img = [img]
+        gt = [gt]
     elif dataset_name == 'Houston':
         img = open_file(folder + 'Houston.mat')
         img = img['img']
         gt = open_file(folder + 'Houston_gt.mat')['Houston_gt']
+        img = [img]
+        gt = [gt]
     elif dataset_name == 'hyrank':
-        img = open_file(folder + 'Training Set/Anafi.tif')
-        gt = open_file(folder + 'Training Set/Anafi_GT.tif')
+        files = ['Training Set/Anafi.tif',
+                 'Training Set/Atokos.tif',
+                 #'Training Set/Donousa.tif',
+                 #'Validation Set/Kasos.tif',
+                 #'Validation Set/Tilos.tif',
+                ]
         
+        files_gt = ['Training Set/Anafi_GT.tif',
+                    'Training Set/Atokos_GT.tif',
+                    #'Training Set/Donousa_GT.tif',
+                    #'Validation Set/Kasos_GT.tif',
+                    #'Validation Set/Tilos_GT.tif',
+                    ]
+        img = [open_file(folder + i) for i in files]
+        gt = [open_file(folder + i) for i in files_gt]
     return img, gt
 
 
