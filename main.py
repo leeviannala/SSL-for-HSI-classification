@@ -448,7 +448,7 @@ def load_datasets(DATASET, datasets_root, SAMPLE_PERCENTAGE):
     train_test_gt = [sample_gt(i, SAMPLE_PERCENTAGE, mode='fixed') for i in gt]
     #train_gt = sample_gt2(X, Y, train_gt, test_gt, SAMPLE_PERCENTAGE)
     # # # breakpoint()
-    pseudo_labelpath= '../' + str(DATASET) + f'/pseudo_labels/pseudo_labels3/pseudo_labels3_{SAMPLE_PERCENTAGE}.npy'
+    pseudo_labelpath = str(DATASET) + f'/pseudo_labels/pseudo_labels3/pseudo_labels3_{SAMPLE_PERCENTAGE}.npy'
     pseudo_labels3 = []
     if not os.path.exists(pseudo_labelpath):
         newdir = str(DATASET) + '/pseudo_labels/pseudo_labels3/'
