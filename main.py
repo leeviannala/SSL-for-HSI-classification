@@ -559,8 +559,19 @@ def main(params):
                 new_path = str(DATASET) + '/Best/' + '_'.join(
                     [str(params.SAMPLE_PERCENTAGE), str(params.DHCN_LAYERS), str(params.CONV_SIZE), str(params.ROT),
                      str(params.MIRROR), str(params.H_MIRROR)]) + '/'
+                new_path_latest = str(DATASET) + '/Latest/' + '_'.join(
+                    [str(params.SAMPLE_PERCENTAGE), str(params.DHCN_LAYERS), str(params.CONV_SIZE), str(params.ROT),
+                     str(params.MIRROR), str(params.H_MIRROR)]) + '/'
                 if not os.path.exists(new_path):
                     os.makedirs(new_path)
+                if not os.path.exists(new_path_latest):
+                    os.makedirs(new_path_latest)
+                save_file_path = new_path_latest + 'latest.pth'
+                states = {'state_dict_DHCN': model_DHCN.state_dict(),
+                              'train_gt': train_gt,
+                              'test_gt': test_gt, }
+
+                torch.save(states, save_file_path)
                 shutil.move(old_path, new_path)
                 new_name = '_'.join(
                     [str(SAMPLE_PERCENTAGE), str(DHCN_LAYERS), str(CONV_SIZE), str(params.ROT), str(params.MIRROR),
@@ -585,8 +596,19 @@ def main(params):
                         new_path = str(DATASET) + '/Best/' + '_'.join(
                             [str(params.SAMPLE_PERCENTAGE), str(params.DHCN_LAYERS), str(params.CONV_SIZE),
                              str(params.ROT), str(params.MIRROR), str(params.H_MIRROR)]) + '/'
+                        new_path_latest = str(DATASET) + '/Latest/' + '_'.join(
+                            [str(params.SAMPLE_PERCENTAGE), str(params.DHCN_LAYERS), str(params.CONV_SIZE), str(params.ROT),
+                            str(params.MIRROR), str(params.H_MIRROR)]) + '/'
                         if not os.path.exists(new_path):
                             os.makedirs(new_path)
+                        if not os.path.exists(new_path_latest):
+                            os.makedirs(new_path_latest)
+                        save_file_path = new_path_latest + 'latest.pth'
+                        states = {'state_dict_DHCN': model_DHCN.state_dict(),
+                                    'train_gt': train_gt,
+                                    'test_gt': test_gt, }
+
+                        torch.save(states, save_file_path)
                         shutil.move(old_path, new_path)
                         new_name = '_'.join([str(SAMPLE_PERCENTAGE), str(DHCN_LAYERS), str(CONV_SIZE), str(params.ROT),
                                              str(params.MIRROR), str(params.H_MIRROR),
@@ -804,13 +826,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Low shot benchmark')
     parser.add_argument('--DHCN_LAYERS', default=1, type=int)
     parser.add_argument('--SAMPLE_PERCENTAGE', default=5, type=int)
-    parser.add_argument('--DATASET', default="hyrank", type=str)  # KSC, PaviaU, IndianPines, Botswana,    !!PaviaC
+    parser.add_argument('--DATASET', default="anafi", type=str)  # KSC, PaviaU, IndianPines, Botswana,    !!PaviaC
     parser.add_argument('--CONV_SIZE', default=3, type=int)  # 3,5,7
     parser.add_argument('--ROT', default=True, type=bool)  # False
     parser.add_argument('--MIRROR', default=True, type=bool)  # False
     parser.add_argument('--H_MIRROR', default='full', type=str)  # half, full
     parser.add_argument('--GPU', default='0,1,2,3', type=str)  # 0,1,2,3
-
     parser.add_argument('--ROT_N', default=1, type=int)  # False
     parser.add_argument('--MIRROR_N', default=1, type=int)  # False
 

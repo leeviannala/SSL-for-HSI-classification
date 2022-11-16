@@ -60,8 +60,26 @@ DATASETS_CONFIG = {
             },
         'hyrank': {
             'urls': ['', ''],
-            'img': 'Training Set/Anafi.tif',
-            'gt': 'Training Set/Anafi_GT.tif'
+            'img': 'Anafi.tif',
+            'gt': 'Anafi_GT.tif'
+            },
+        'anafi': {
+            'folder': 'hyrank/Training Set/',
+            'urls': ['', ''],
+            'img': 'Anafi.tif',
+            'gt': 'Anafi_GT.tif'
+        },
+        'atokos': {
+            'folder': 'hyrank/Training Set/',
+            'urls': ['', ''],
+            'img': 'Atokos.tif',
+            'gt': 'Atokos_GT.tif'
+        },
+        'donousa': {
+            'folder': 'hyrank/Training Set/',
+            'urls': ['', ''],
+            'img': 'Donousa.tif',
+            'gt': 'Donousa_GT.tif'
         }
     }
 
@@ -109,6 +127,7 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
     dataset = datasets[dataset_name]
 
     folder = target_folder + datasets[dataset_name].get('folder', dataset_name + '/')
+    # breakpoint()
     if dataset.get('download', True):
         # Download the dataset if is not present
         if not os.path.isdir(folder):
@@ -231,19 +250,114 @@ def get_dataset(dataset_name, target_folder="./", datasets=DATASETS_CONFIG):
         img = [img]
         gt = [gt]
     elif dataset_name == 'hyrank':
-        files = ['Training Set/Anafi.tif',
+        files = ['Anafi.tif',
                  'Training Set/Atokos.tif',
                  'Training Set/Donousa.tif',
-                 'Validation Set/Kasos.tif',
-                 'Validation Set/Tilos.tif',
-                ]
+                 ]
         
         files_gt = ['Training Set/Anafi_GT.tif',
                     'Training Set/Atokos_GT.tif',
                     'Training Set/Donousa_GT.tif',
-                    'Validation Set/Kasos_GT.tif',
-                    'Validation Set/Tilos_GT.tif',
                     ]
+        img = [open_file(folder + i) for i in files]
+
+        rgb_bands = [30,20,2]
+
+        gt = [open_file(folder + i) for i in files_gt]
+
+        label_values = ['Undefined',
+                        'High intensity developed', 
+                        'Med-low intensity developed',
+                        'Deciduous, Evergreen, mixed forest',
+                        'shrubland',
+                        'Grassland-Pasture',
+                        'Bareland',
+                        'water',
+                        'corn',
+                        'cotton',
+                        'cereals',
+                        'almonds',
+                        'grass fodders',
+                        'vinewards-grapes',
+                        'walnuts',
+                        'pistachios',
+                        'citrus',
+                        'fallow']
+
+        all_labels = np.arange(len(label_values))
+
+
+        ignored_labels = [0]
+    elif dataset_name == 'anafi':
+        files = ['Anafi.tif']
+        
+        files_gt = ['Anafi_GT.tif']
+        img = [open_file(folder + i) for i in files]
+
+        rgb_bands = [30,20,2]
+
+        gt = [open_file(folder + i) for i in files_gt]
+
+        label_values = ['Undefined',
+                        'High intensity developed', 
+                        'Med-low intensity developed',
+                        'Deciduous, Evergreen, mixed forest',
+                        'shrubland',
+                        'Grassland-Pasture',
+                        'Bareland',
+                        'water',
+                        'corn',
+                        'cotton',
+                        'cereals',
+                        'almonds',
+                        'grass fodders',
+                        'vinewards-grapes',
+                        'walnuts',
+                        'pistachios',
+                        'citrus',
+                        'fallow']
+
+        all_labels = np.arange(len(label_values))
+
+
+        ignored_labels = [0]
+    elif dataset_name == 'atokos':
+        files = ['Atokos.tif']
+        
+        files_gt = ['Atokos_GT.tif']
+        img = [open_file(folder + i) for i in files]
+
+        rgb_bands = [30,20,2]
+
+        gt = [open_file(folder + i) for i in files_gt]
+
+        label_values = ['Undefined',
+                        'High intensity developed', 
+                        'Med-low intensity developed',
+                        'Deciduous, Evergreen, mixed forest',
+                        'shrubland',
+                        'Grassland-Pasture',
+                        'Bareland',
+                        'water',
+                        'corn',
+                        'cotton',
+                        'cereals',
+                        'almonds',
+                        'grass fodders',
+                        'vinewards-grapes',
+                        'walnuts',
+                        'pistachios',
+                        'citrus',
+                        'fallow']
+
+        all_labels = np.arange(len(label_values))
+
+
+        ignored_labels = [0]
+    elif dataset_name == 'donousa':
+        files = ['Donousa.tif']
+        
+        files_gt = ['Donousa_GT.tif']
         img = [open_file(folder + i) for i in files]
 
         rgb_bands = [30,20,2]
@@ -345,17 +459,29 @@ def get_originate_dataset(dataset_name, target_folder="./", datasets=DATASETS_CO
     elif dataset_name == 'hyrank':
         files = ['Training Set/Anafi.tif',
                  'Training Set/Atokos.tif',
-                 #'Training Set/Donousa.tif',
-                 #'Validation Set/Kasos.tif',
-                 #'Validation Set/Tilos.tif',
-                ]
+                 'Training Set/Donousa.tif']
         
         files_gt = ['Training Set/Anafi_GT.tif',
                     'Training Set/Atokos_GT.tif',
-                    #'Training Set/Donousa_GT.tif',
-                    #'Validation Set/Kasos_GT.tif',
-                    #'Validation Set/Tilos_GT.tif',
-                    ]
+                    'Training Set/Donousa_GT.tif']
+        img = [open_file(folder + i) for i in files]
+        gt = [open_file(folder + i) for i in files_gt]
+    elif dataset_name == 'anafi':
+        files = ['Anafi.tif']
+        
+        files_gt = ['Anafi_GT.tif']
+        img = [open_file(folder + i) for i in files]
+        gt = [open_file(folder + i) for i in files_gt]
+    elif dataset_name == 'atokos':
+        files = ['Atokos.tif']
+        
+        files_gt = ['Atokos_GT.tif']
+        img = [open_file(folder + i) for i in files]
+        gt = [open_file(folder + i) for i in files_gt]
+    elif dataset_name == 'donousa':
+        files = ['Donousa.tif']
+        
+        files_gt = ['Donousa_GT.tif']
         img = [open_file(folder + i) for i in files]
         gt = [open_file(folder + i) for i in files_gt]
     return img, gt
