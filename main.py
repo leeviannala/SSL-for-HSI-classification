@@ -414,7 +414,7 @@ def single_pad(pad_value):
 
 def calc_pad(mx, shape, axes):
     pad_values = mx - shape
-    pads = [[0,0], [0,0], [0,0]]
+    pads = [[0,0] for _ in shape]
     for axis in axes:
         #print(i)
         #print(i in axes)
@@ -487,10 +487,11 @@ def main(params):
     if RUNS == 0:
         return
 
-    for _ in range(RUNS):
+    for run in range(RUNS):
 
         start_time = time.time()
-
+        accuracies = []
+        losses = []
         SAMPLE_PERCENTAGE = params.SAMPLE_PERCENTAGE
         DATASET = params.DATASET
         DHCN_LAYERS = params.DHCN_LAYERS
@@ -552,7 +553,7 @@ def main(params):
             if epoch % 100 == 0:
                 print("epoch: %d" % (epoch))
             current_time = time.time()
-            if current_time - start_time > 28800:
+            if current_time - start_time > 50000:#28800:
 
                 print(f'Training end due to current_time={current_time-start_time}')
                 old_path = save_path + 'save_' + str(tmp_epoch) + '_' + str(round(best_ACC, 2)) + '.pth'
@@ -566,7 +567,7 @@ def main(params):
                     os.makedirs(new_path)
                 if not os.path.exists(new_path_latest):
                     os.makedirs(new_path_latest)
-                save_file_path = new_path_latest + 'latest.pth'
+                save_file_path = new_path_latest + f'latest_{run}.pth'
                 states = {'state_dict_DHCN': model_DHCN.state_dict(),
                               'train_gt': train_gt,
                               'test_gt': test_gt, }
@@ -576,9 +577,17 @@ def main(params):
                 new_name = '_'.join(
                     [str(SAMPLE_PERCENTAGE), str(DHCN_LAYERS), str(CONV_SIZE), str(params.ROT), str(params.MIRROR),
                      str(params.H_MIRROR), str(round(best_ACC, 2)) + '.pth'])
+                new_name_acc = '_'.join(
+                    [str(SAMPLE_PERCENTAGE), str(DHCN_LAYERS), str(CONV_SIZE), str(params.ROT), str(params.MIRROR),
+                     str(params.H_MIRROR), str(round(best_ACC, 2)) + '_accuracy.npy'])
+                new_name_loss = '_'.join(
+                    [str(SAMPLE_PERCENTAGE), str(DHCN_LAYERS), str(CONV_SIZE), str(params.ROT), str(params.MIRROR),
+                     str(params.H_MIRROR), str(round(best_ACC, 2)) + '_losses.npy'])
+                np.save(new_path + new_name_acc, accuracies)
+                np.save(new_path + new_name_loss, losses)
+                
                 os.rename(new_path + 'save_' + str(tmp_epoch) + '_' + str(round(best_ACC, 2)) + '.pth',
                           new_path + new_name)
-
                 shutil.rmtree(save_path)
 
                 break
@@ -603,7 +612,7 @@ def main(params):
                             os.makedirs(new_path)
                         if not os.path.exists(new_path_latest):
                             os.makedirs(new_path_latest)
-                        save_file_path = new_path_latest + 'latest.pth'
+                        save_file_path = new_path_latest + f'latest_{run}.pth'
                         states = {'state_dict_DHCN': model_DHCN.state_dict(),
                                     'train_gt': train_gt,
                                     'test_gt': test_gt, }
@@ -613,6 +622,14 @@ def main(params):
                         new_name = '_'.join([str(SAMPLE_PERCENTAGE), str(DHCN_LAYERS), str(CONV_SIZE), str(params.ROT),
                                              str(params.MIRROR), str(params.H_MIRROR),
                                              str(round(best_ACC, 2)) + '.pth'])
+                        new_name_acc = '_'.join(
+                            [str(SAMPLE_PERCENTAGE), str(DHCN_LAYERS), str(CONV_SIZE), str(params.ROT), str(params.MIRROR),
+                            str(params.H_MIRROR), str(round(best_ACC, 2)) + '_accuracy.npy'])
+                        new_name_loss = '_'.join(
+                            [str(SAMPLE_PERCENTAGE), str(DHCN_LAYERS), str(CONV_SIZE), str(params.ROT), str(params.MIRROR),
+                            str(params.H_MIRROR), str(round(best_ACC, 2)) + '_losses.npy'])
+                        np.save(new_name_acc, accuracies)
+                        np.save(new_name_loss, losses)
                         os.rename(new_path + 'save_' + str(tmp_epoch) + '_' + str(round(best_ACC, 2)) + '.pth',
                                   new_path + new_name)
 
@@ -685,7 +702,9 @@ def main(params):
                     #with torch.no_grad():
                     #    # torch.cuda.empty_cache()
                     nn.utils.clip_grad_norm_(model_DHCN.parameters(), 3.0)
+                    breakpoint()
                     loss.backward()#retain_graph=True)
+                    # losses.append(loss.item())
                     optimizer_DHCN.step()
                     optimizer_DHCN.zero_grad()
                     # loss = loss.item()
@@ -797,24 +816,30 @@ def main(params):
                         n_classes=N_CLASSES)['Kappa']
 
                 tmp_count += 1
-
+                accuracies.append(max(Acc))
+                # loss_copy = loss.copy()
+                losses.append(loss.item())
                 if max(Acc) > best_ACC:
                 # if Acc[-1] > best_ACC:
                     best_ACC = max(Acc)
                     # best_ACC = Acc[-1]
                     save_file_path = save_path + 'save_' + str(epoch) + '_' + str(round(best_ACC, 2)) + '.pth'
+                    save_file_path_acc = save_path + 'save_' + str(epoch) + '_' + str(round(best_ACC, 2)) + '_accuracy.npy'
+                    save_file_path_loss = save_path + 'save_' + str(epoch) + '_' + str(round(best_ACC, 2)) + '_loss.npy'
                     states = {'state_dict_DHCN': model_DHCN.state_dict(),
                               'train_gt': train_gt,
                               'test_gt': test_gt, }
 
                     torch.save(states, save_file_path)
+                    np.save(save_file_path_acc, accuracies)
+                    np.save(save_file_path_loss, losses)
 
                     tmp_count = 0
                     tmp_epoch = epoch
                     print('save: ', epoch, str(round(best_ACC, 2)))
                     print('save: %d, OA: %f AA: %f Kappa: %f' %(epoch, OA,AA,kappa))
                     # print(loss_supervised.data, loss_self.data, loss_distill.data)
-                    print(loss_supervised.data)
+                    # print(loss_supervised.data)
                     print(np.round(Acc, 2))
 
                 if tmp_count == max_tmp_count:
