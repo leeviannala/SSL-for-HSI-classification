@@ -1,6 +1,14 @@
+from typing import Callable, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.modules.loss import _Loss
+from torch import Tensor
+from torch.nn import _reduction as _Reduction
+from torch.overrides import has_torch_function_variadic, handle_torch_function
+import warnings
+from torchmetrics.functional.regression.mape import _mean_absolute_percentage_error_compute
+from torchmetrics.functional.regression.mape import _mean_absolute_percentage_error_update
 
 class DualNetwork(nn.Module):
     def __init__(self) -> None:
@@ -8,6 +16,33 @@ class DualNetwork(nn.Module):
     
     def forward():
         pass
+
+
+def IoU(inputt, target, smooth=1):
+        #intersection is equivalent to True Positive count
+        #union is the mutually inclusive area of all labels & predictions 
+        inputt = inputt.view(-1)
+        target = target.view(-1)
+        intersection = (inputt * target).sum()
+        total = (inputt + target).sum()
+        union = total - intersection 
+        
+        ret = (intersection + smooth)/(union + smooth)
+        return ret
+
+class DualLoss(_Loss):
+    __constants__ = ['reduction']
+    def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
+        super(DualLoss, self).__init__(size_average, reduce, reduction)
+
+    def forward(self, input_hsi: Tensor, target_hsi: Tensor, 
+                input_class: Tensor, target_class: Tensor, 
+                smooth: float =1.0, epsilon: float =1.17e-06) -> Tensor:
+        sum_abs_per_error, num_obs = _mean_absolute_percentage_error_update(
+            input_class, target_class, epsilon=epsilon)
+        mape = _mean_absolute_percentage_error_compute(sum_abs_per_error, num_obs)
+        iou = 1 - IoU(input_class, target_class, smooth=smooth)
+        return mape + iou
     
     
 class Conv(nn.Module):
