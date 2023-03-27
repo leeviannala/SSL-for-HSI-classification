@@ -72,8 +72,71 @@ class Conv(nn.Module):
     
     
 class ConvDecoder(nn.Module):
-    def __init__(self) -> None:
+    '''
+    Input is a*b*c, output is a*b*d where c << d. So we need to deconvolve the spectral dimension. 
+    a*b*c -> 3a * 3b * 3c -> ... -> 3a * 3b * d -> average pool 3,3 -> a*b*d 
+    '''
+    def conv_block(self, in_channels=1, out_channels=1, kernel_size=1, stride=1, padding=0, dilation=1, activation=nn.LeakyReLU):
+        return nn.Sequential(
+            nn.Conv3D(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation),
+            nn.BatchNorm3d(in_channels=out_channels),
+            activation()
+        )
+    def deconv_block(in_channels    = 1, 
+                     out_channels   = 1, 
+                     kernel_size    = 1, 
+                     stride         = 1, 
+                     padding        = 0, 
+                     dilation       = 1, 
+                     output_padding = 0,
+                     activation=nn.LeakyReLU):
+        return nn.Sequential(
+            nn.ConvTranspose3d(in_channels    = in_channels, 
+                               out_channels   = out_channels, 
+                               kernel_size    = kernel_size, 
+                               stride         = stride, 
+                               padding        = padding, 
+                               dilation       = dilation, 
+                               output_padding = output_padding),
+            nn.BatchNorm3d(in_channels=out_channels),
+            activation()
+    )
+    def deconv_2D_block(in_channels    = 1, 
+                     out_channels   = 1, 
+                     kernel_size    = 1, 
+                     stride         = 1, 
+                     padding        = 0, 
+                     dilation       = 1, 
+                     output_padding = 0,
+                     activation=nn.LeakyReLU):
+        return nn.Sequential(
+            nn.ConvTranspose2d(in_channels    = in_channels, 
+                               out_channels   = out_channels, 
+                               kernel_size    = kernel_size, 
+                               stride         = stride, 
+                               padding        = padding, 
+                               dilation       = dilation, 
+                               output_padding = output_padding),
+            nn.BatchNorm3d(in_channels=out_channels),
+            activation()
+    )
+    def __init__(self, parameters) -> None:
         super().__init__()
-    
-    def forward():
-        pass
+        self.conv1 = self.conv_block(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1, dilation=1)
+        self.deconv1 = self.deconv_block(in_channels=32, out_channels=32, kernel_size=(3, 1, 1), stride=(3,1,1), padding=0, dilation=1, output_padding=0)
+        self.conv2 = self.conv_block(in_channels=32, out_channels=16, kernel_size=(1, 5, 5), stride=1, padding=(0,2,2), dilation=1)
+        self.conv3 = self.conv_block(in_channels=16, out_channels=8, kernel_size=(5,1,1), padding=(2,0,0), stride=1, dilation=1)
+        self.conv4 = self.conv_block(in_channels=8, out_channels=1, kernel_size=3, stride=1, padding=1, dilation=1)
+        self.deconv2 = self.deconv_2D_block(in_channels = 3*parameters['input_bands'], 
+                                            out_channels=parameters['output_bands'], 
+                                            kernel_size=1, padding=0, output_padding=0, dilation=1, stride=1, activation=nn.Sigmoid)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.deconv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+        x = self.deconv2(x)
+        return x
+        

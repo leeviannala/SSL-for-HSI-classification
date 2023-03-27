@@ -11,6 +11,8 @@ from datasets import get_dataset, get_originate_dataset
 from skimage.segmentation import felzenszwalb
 import time
 from scipy.stats import entropy
+from torch.utils.data import DataLoader, TensorDataset
+
 
 def get_pseudo_label(segments, TRAIN_Y, gt):
     MAX_S = np.max(segments)
@@ -482,7 +484,7 @@ def save_states(path, states, fname):
     save_file_path = path + fname
     torch.save(states, save_file_path)
 
-    
+
 
 def end_of_training_saves(temp_path, best_path, latest_path, temp_name, latest_name,
                           best_name_root, states, losses, accuracies):
@@ -494,4 +496,75 @@ def end_of_training_saves(temp_path, best_path, latest_path, temp_name, latest_n
 def mid_training_saves(temp_path, temp_name_root, states, losses, accuracies):
     save_states(temp_path, states, temp_name_root + '.pth')
     save_loss_acc(path=temp_path, name_root=temp_name_root, losses=losses, accuracies=accuracies)
+
+def make_dirs(list_of_dirs):
+    for i in list_of_dirs:
+        if not os.path.exists(i):
+            os.makedirs(i)
     
+def how_many_runs(path, RUNS, at_least_one=True):
+    if os.path.exists(path):
+        RUNS = RUNS - len(os.listdir(path))
+    if RUNS <= 0 and at_least_one:
+        RUNS = 1
+    return RUNS
+
+def end_of_training_time(model, train_gt, test_gt, 
+                         file_and_folder_name_common_part, best_ACC, tmp_epoch,
+                         temp_path, best_path, latest_path, losses, accuracies, run):
+    states = {'state_dict_DHCN': model.state_dict(),
+                    'train_gt': train_gt,
+                    'test_gt': test_gt, }
+    best_name_root = '_'.join(
+            [file_and_folder_name_common_part, str(round(best_ACC, 2))])
+    temp_name = 'save_' + str(tmp_epoch) + '_' + str(round(best_ACC, 2)) + '.pth'
+    latest_name = file_and_folder_name_common_part + '_' + f'latest_{run}.pth'
+    end_of_training_saves(temp_path, best_path, latest_path, temp_name, latest_name,
+                            best_name_root, states, losses, accuracies)
+
+
+def permute_list_items(lst, first=True):
+    lst2 = []
+    for item in lst:
+        if first:
+            lst2.append(item.permute(1,0,2,3))
+        else:
+            lst2.append(item.permute(2,1,0,3))
+    return lst2
+
+def make_ds2(lst, batch_size, shuffle):
+    if lst[0][1] > lst[0][2]:
+        first = True
+    else:
+        first = False
+    lst2 = permute_list_items(lst, first=first)
+    dataset = TensorDataset(*lst2)
+    dataloader = DataLoader(dataset, batch_size, shuffle=shuffle)
+    return dataloader, first
+
+
+def make_ds(TRAIN_IMG, TRAIN_Y, TRAIN_PL, batch_size):
+    first=True
+    if TRAIN_IMG.shape[1] > TRAIN_IMG.shape[2]:
+        dataset = TensorDataset(TRAIN_IMG.permute(1,0,2,3), TRAIN_Y.permute(1,0,2), TRAIN_PL[0].permute(1,0,2,3))
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    else:
+        dataset = TensorDataset(TRAIN_IMG.permute(2,1,0,3), TRAIN_Y.permute(2,1,0), TRAIN_PL[0].permute(2,1,0,3))
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        first = False
+    return dataloader, first
+
+def permute_batch(TRAIN_IMG, TRAIN_Y, TRAIN_PL, first):
+    TRAIN_IMG, TRAIN_Y, TRAIN_PL = permute_list_items(
+        [TRAIN_IMG, TRAIN_Y, TRAIN_PL], first)
+    TRAIN_PL = [TRAIN_PL]
+    if first:
+        TRAIN_PL = [TRAIN_PL.permute(1,0,2,3)]
+        TRAIN_Y = TRAIN_Y.permute(1,0,2)
+        TRAIN_IMG = TRAIN_IMG.permute(1, 3, 0, 2)
+    else:
+        TRAIN_PL = [TRAIN_PL.permute(2,1,0,3)]
+        TRAIN_Y = TRAIN_Y.permute(2,1,0)
+        TRAIN_IMG = TRAIN_IMG.permute(2,3,1,0)
+    return TRAIN_IMG, TRAIN_Y, TRAIN_PL
+
