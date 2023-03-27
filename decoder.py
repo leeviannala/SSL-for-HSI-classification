@@ -39,7 +39,7 @@ class DualLoss(_Loss):
                 input_class: Tensor, target_class: Tensor, 
                 smooth: float =1.0, epsilon: float =1.17e-06) -> Tensor:
         sum_abs_per_error, num_obs = _mean_absolute_percentage_error_update(
-            input_class, target_class, epsilon=epsilon)
+            input_hsi, target_hsi, epsilon=epsilon)
         mape = _mean_absolute_percentage_error_compute(sum_abs_per_error, num_obs)
         iou = 1 - IoU(input_class, target_class, smooth=smooth)
         return mape + iou
@@ -69,6 +69,10 @@ class Conv(nn.Module):
         x = self.fc3(x)
         return x
 
+
+class NN(nn.Module):
+    def __init__(self, input_shape) -> None:
+        super().__init__()
     
     
 class ConvDecoder(nn.Module):
